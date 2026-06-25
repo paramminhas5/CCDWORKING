@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import headphones from "@/assets/headphones.svg";
 import { imgUrl } from "@/lib/img";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 
 const REASONS = [
   "Brand collab",

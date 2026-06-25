@@ -1,8 +1,6 @@
 /**
- * useSmoothScroll — previously used Lenis for smooth scrolling.
- * Removed because it caused lag/jitter with Framer Motion parallax.
- * Native browser scrolling (with CSS scroll-behavior: smooth) is smoother.
+ * @deprecated — Smooth scroll is now handled at the app level via <SmoothScroll> in _app.tsx.
+ * This hook is a no-op kept for backwards compatibility during migration.
+ * Remove all useSmoothScroll() calls when you see them.
  */
-export const useSmoothScroll = () => {
-  // No-op — native scroll is used instead.
-};
+export const useSmoothScroll = () => {};

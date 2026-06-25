@@ -4,10 +4,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DiscoProvider } from "@/contexts/DiscoContext";
-import ScrollToTop from "@/components/ScrollToTop";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
-import { useCartSync } from "@/hooks/useCartSync";
+import SmoothScroll from "@/components/SmoothScroll";
+import ScrollToTop from "@/components/ScrollToTop";
 import "@/index.css";
 import "@/pages/ccd.css";
 import React from "react";
@@ -18,11 +18,6 @@ const queryClient = new QueryClient({
   },
 });
 
-function CartSyncProvider({ children }: { children: React.ReactNode }) {
-  useCartSync();
-  return <>{children}</>;
-}
-
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <QueryClientProvider client={queryClient}>
@@ -31,11 +26,11 @@ export default function App({ Component, pageProps }: AppProps) {
         <Sonner />
         <ThemeProvider>
           <DiscoProvider>
-            <CartSyncProvider>
+            <SmoothScroll>
               <ScrollToTop />
               <Component {...pageProps} />
               <ThemeSwitcher />
-            </CartSyncProvider>
+            </SmoothScroll>
           </DiscoProvider>
         </ThemeProvider>
       </TooltipProvider>

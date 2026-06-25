@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import Confetti from "@/components/Confetti";
 
 const Schema = z.object({
@@ -98,20 +98,32 @@ const RsvpDialog = ({ open, onOpenChange, eventSlug, eventTitle, eventDate, even
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("event-rsvp", {
-        body: { ...parsed.data, event_slug: eventSlug, website, whatsapp: whatsapp || undefined },
-      });
-      if (error) throw error;
-      if ((data as any)?.duplicate) {
-        toast("You're already on the list. See you on the floor. 🐾");
-        setTimeout(() => onOpenChange(false), 800);
-      } else {
-        toast.success(`RSVP confirmed for ${eventTitle}! Check your inbox for confirmation.`);
-        setBurst(true);
-        setTimeout(() => setBurst(false), 1300);
-        reset();
-        setDone(true);
+      const { data, error } = await supabase
+        .from("event_rsvps")
+        .insert({
+          name: parsed.data.name,
+          email: parsed.data.email,
+          plus_ones: parsed.data.plus_ones,
+          event_slug: eventSlug,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // Duplicate check (unique constraint on email+event_slug)
+        if (error.code === "23505") {
+          toast("You're already on the list. See you on the floor. 🐾");
+          setTimeout(() => onOpenChange(false), 800);
+          return;
+        }
+        throw error;
       }
+
+      toast.success(`RSVP confirmed for ${eventTitle}! See you there.`);
+      setBurst(true);
+      setTimeout(() => setBurst(false), 1300);
+      reset();
+      setDone(true);
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong. Try again?");

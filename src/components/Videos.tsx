@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const CHANNEL_URL = "https://www.youtube.com/@thesecatscandance";
@@ -20,13 +20,17 @@ const Videos = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("youtube-videos");
+        const { data, error } = await supabase.from("site_videos").select("*").order("sort_order");
         if (cancelled) return;
-        if (error || !data?.videos?.length) {
+        if (error || !data?.length) {
           setError(true);
           return;
         }
-        setVideos(data.videos as Video[]);
+        setVideos(data.map((v: any) => ({
+          id: v.youtube_id,
+          title: v.title,
+          thumbnail: v.thumbnail_url ?? `https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg`,
+        })));
       } catch {
         if (!cancelled) setError(true);
       }

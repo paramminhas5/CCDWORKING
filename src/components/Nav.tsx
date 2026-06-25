@@ -4,8 +4,6 @@ import { ChevronDown } from "lucide-react";
 import DiscoButton from "@/components/DiscoButton";
 import DiscoMute from "@/components/DiscoMute";
 import DiscoHint from "@/components/DiscoHint";
-import { CartDrawer } from "@/components/CartDrawer";
-import { useCartStore } from "@/stores/cartStore";
 import ccdLogo from "@/assets/ccd-logo.png";
 import { imgUrl } from "@/lib/img";
 
@@ -137,8 +135,6 @@ const Nav = () => {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const cartCount = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
-  const hasCart = cartCount > 0;
 
   const lightBgRoutes = ["/playlists", "/videos"];
   const forceScrolledStyle = lightBgRoutes.some((r) => location.pathname === r || location.pathname.startsWith(r + "/"));
@@ -206,7 +202,6 @@ const Nav = () => {
         <div className="hidden lg:flex items-center gap-3">
           <span className="hidden xl:block"><DiscoMute /></span>
           <DiscoButton compact />
-          {hasCart && <CartDrawer />}
           <a
             href="/#early-access"
             onClick={goToEarlyAccess}
@@ -219,7 +214,6 @@ const Nav = () => {
         <div className="lg:hidden flex items-center gap-1.5 sm:gap-2 relative">
           <DiscoMute />
           <div className="relative"><DiscoButton compact /><DiscoHint /></div>
-          {hasCart && <CartDrawer />}
           <button
             aria-label="Toggle menu"
             aria-expanded={open}

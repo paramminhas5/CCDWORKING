@@ -1,55 +1,13 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-shim";
-
-export type HomeContent = {
-  about?: {
-    kicker?: string;
-    title?: string;
-    body?: string;
-    ctaLabel?: string;
-    ctaHref?: string;
+/**
+ * useHomeContent — returns static homepage content.
+ * Previously fetched from site_settings via API. Now returns defaults.
+ * Can be wired to Supabase later for dynamic CMS content.
+ */
+export function useHomeContent() {
+  return {
+    about_heading: "WE DON'T JUST THROW PARTIES.",
+    about_body: "We build rooms worth being in. Underground dance music, limited drops, and a crew that shows up. Bangalore-born, India-wide.",
+    about_cta_label: "JOIN THE PACK",
+    about_cta_link: "#early-access",
   };
-  cta?: {
-    title?: string;
-    body?: string;
-    label?: string;
-    href?: string;
-  };
-  section_visibility?: {
-    show_scene_map?: boolean;
-    show_pick_your_sound?: boolean;
-    show_featured_artists?: boolean;
-    [key: string]: boolean | undefined;
-  };
-};
-
-export const HOME_CONTENT_DEFAULTS: HomeContent = {
-  about: {
-    kicker: "/ THE BRAND",
-    title: "A CULTURE FOR PEOPLE WHO MOVE.",
-    body: "Cats Can Dance is dance music, pet culture and streetwear in one club. Drops, parties, playlists and a community that shows up.",
-    ctaLabel: "READ THE STORY →",
-    ctaHref: "/about",
-  },
-};
-
-export const useHomeContent = () => {
-  const [content, setContent] = useState<HomeContent>(HOME_CONTENT_DEFAULTS);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("site_settings")
-        .select("home_content")
-        .eq("id", "main")
-        .maybeSingle();
-      const remote = (data?.home_content ?? {}) as HomeContent;
-      setContent({
-        about: { ...HOME_CONTENT_DEFAULTS.about, ...(remote.about ?? {}) },
-        cta: { ...HOME_CONTENT_DEFAULTS.cta, ...(remote.cta ?? {}) },
-      });
-    })();
-  }, []);
-
-  return content;
-};
+}

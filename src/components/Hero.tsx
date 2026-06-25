@@ -17,25 +17,22 @@ import { parseEventDate } from "@/lib/parse-date";
 // next/image with priority handles critical image preloading automatically.
 // No manual preload needed.
 
-/** Fetches the next upcoming event and returns a countdown + slug for the urgency strip. */
+/** Returns the next upcoming event — hardcoded for now, can be dynamic from Supabase later */
 function useNextEvent() {
-  const [next, setNext] = useState<{ title: string; date: string; venue: string; slug: string } | null>(null);
+  const [next] = useState<{ title: string; date: string; venue: string; slug: string } | null>({
+    title: "CCD×SOCIAL 01",
+    date: "Sun, Jun 28, 2026",
+    venue: "Social, Indiranagar",
+    slug: "ccdxsocial-blr",
+  });
   const [daysAway, setDaysAway] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/events?status=upcoming&limit=1")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: any) => {
-        const event = Array.isArray(data) ? data[0] : data?.events?.[0] ?? null;
-        if (!event?.slug) return;
-        setNext({ title: event.title, date: event.date, venue: event.venue, slug: event.slug });
-        const d = parseEventDate(event.date);
-        if (d) {
-          const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
-          if (diff > 0 && diff <= 60) setDaysAway(diff);
-        }
-      })
-      .catch(() => {});
+    const d = parseEventDate("Sun, Jun 28, 2026");
+    if (d) {
+      const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
+      if (diff > 0 && diff <= 60) setDaysAway(diff);
+    }
   }, []);
 
   return { next, daysAway };
@@ -96,14 +93,14 @@ const Hero = () => {
         )}
 
         <motion.div
-          style={{ rotate: starRotA, willChange: "transform" }}
+          style={{ rotate: starRotA }}
           className="absolute top-24 left-6 md:top-28 md:left-16 z-10 w-16 md:w-32 text-acid-yellow drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           aria-hidden
         >
           <Star />
         </motion.div>
         <motion.div
-          style={{ rotate: starRotB, willChange: "transform" }}
+          style={{ rotate: starRotB }}
           className="absolute top-32 right-6 md:top-40 md:right-20 z-10 w-14 md:w-28 text-magenta drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           aria-hidden
         >
@@ -112,7 +109,7 @@ const Hero = () => {
 
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-4 text-center pointer-events-none">
           <motion.h1
-            style={{ scale: titleScale, y: titleY, transformOrigin: "center center", willChange: "transform" }}
+            style={{ scale: titleScale, y: titleY, transformOrigin: "center center" }}
             className="font-display text-[15vw] md:text-[11vw] leading-[0.85] text-cream drop-shadow-[6px_6px_0_hsl(var(--ink))] -mt-4 md:-mt-6"
           >
             CATS<br/>CAN<br/>DANCE
@@ -126,7 +123,7 @@ const Hero = () => {
         <div className="contents">
           {/* DJ cat — slightly overlaps the headline */}
           <motion.div
-            style={{ y: djY, willChange: "transform" }}
+            style={{ y: djY }}
             className="absolute inset-x-0 mx-auto bottom-20 md:-bottom-8 z-30 w-[100%] md:w-[92%] min-w-[300px] max-w-[820px] pointer-events-none"
           >
             <Image
@@ -142,7 +139,7 @@ const Hero = () => {
           {FLANK_CATS.map((c) => (
             <motion.div
               key={c.id}
-              style={{ x: c.x, rotate: c.rot, opacity: flankOpacity, willChange: "transform" }}
+              style={{ x: c.x, rotate: c.rot, opacity: flankOpacity }}
               className={`${flankBase} ${c.pos}`}
             >
               <Image src={c.src} alt="" aria-hidden priority className="w-full h-auto" />
@@ -151,13 +148,13 @@ const Hero = () => {
 
           {/* Big bottom side cats */}
           <motion.div
-            style={{ x: leftX, y: leftY, rotate: leftRot, willChange: "transform" }}
+            style={{ x: leftX, y: leftY, rotate: leftRot }}
             className="absolute bottom-28 md:bottom-4 left-1 md:left-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
             <Image src={catLeft} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
           <motion.div
-            style={{ x: rightX, y: rightY, rotate: rightRot, willChange: "transform" }}
+            style={{ x: rightX, y: rightY, rotate: rightRot }}
             className="absolute bottom-28 md:bottom-4 right-1 md:right-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
             <Image src={catRight} alt="" aria-hidden priority className="w-full h-auto wiggle" />

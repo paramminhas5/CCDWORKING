@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 
 type Verifications = {
   google?: string;

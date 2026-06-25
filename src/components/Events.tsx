@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/compat-router";
 import RsvpDialog from "@/components/RsvpDialog";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import type { EventRow } from "@/types/events";
 import { getStaticEventRow, getStaticEventsBySeries } from "@/content/events";
 

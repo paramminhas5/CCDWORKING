@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import vinyl from "@/assets/vinyl-music.png";
 import { imgUrl } from "@/lib/img";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 
 type Platform = "spotify" | "youtube" | "soundcloud";
 type PlaylistItem = {

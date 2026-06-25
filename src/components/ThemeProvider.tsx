@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import { applyTheme, THEME_PRESETS, ThemeConfig, DEFAULT_THEME, FRONTEND_PRESET_IDS } from "@/lib/theme";
 
 const FRONTEND_IDS = FRONTEND_PRESET_IDS.filter((id) => THEME_PRESETS[id]);

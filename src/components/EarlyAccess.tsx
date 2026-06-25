@@ -5,7 +5,7 @@ import { z } from "zod";
 import note from "@/assets/music-note.png";
 import { imgUrl } from "@/lib/img";
 import Confetti from "@/components/Confetti";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import { useSignupCount } from "@/hooks/useSocialProof";
 
 const EmailSchema = z.string().trim().toLowerCase().email().max(255);

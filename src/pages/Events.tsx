@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "@/lib/compat-router";
 import { parseEventDate } from "@/lib/parse-date";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 import { getEventContent, EVENT_ROWS } from "@/content/events";
 import type { EventRow } from "@/types/events";
 

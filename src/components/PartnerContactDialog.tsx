@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase-shim";
+import { supabase } from "@/lib/supabase";
 
 export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general" | "sponsors";
 
@@ -138,7 +138,7 @@ const PartnerContactDialog = ({ kind, trigger, defaultReason, defaultMessage, op
         "",
         parsed.data.message,
       ].filter(Boolean).join("\n");
-      const { data, error } = await supabase.functions.invoke("contact-submit", {
+      const { error } = await supabase.from("contact_messages").insert({
         body: {
           name: parsed.data.name,
           email: parsed.data.email,
