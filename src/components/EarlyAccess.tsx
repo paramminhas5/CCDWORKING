@@ -38,15 +38,15 @@ const EarlyAccess = () => {
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/early-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: parsed.data, source: "home", website }),
+      const { error } = await supabase.from("early_access_signups").insert({
+        email: parsed.data,
+        source: "home",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok && res.status !== 409) throw new Error(data?.error ?? "Failed");
-      if (data?.duplicate || res.status === 409) {
+      // Duplicate email (unique constraint) is not an error for the user
+      if (error && error.code === "23505") {
         toast("You're already on the list. See you soon. 🐾");
+      } else if (error) {
+        throw new Error(error.message);
       } else {
         toast.success("You're in! Welcome to the litter. Check your inbox.");
       }

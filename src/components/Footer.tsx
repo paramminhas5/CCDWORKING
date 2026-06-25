@@ -1,4 +1,5 @@
 import { Link } from "@/lib/compat-router";
+import { supabase } from "@/lib/supabase";
 import ccdLogo from "@/assets/ccd-logo.png";
 import { imgUrl } from "@/lib/img";
 import { getAllPosts } from "@/content/posts";
@@ -113,12 +114,13 @@ const Footer = () => {
     if (!email || state === "busy" || state === "done") return;
     setState("busy");
     try {
-      const res = await fetch("/api/early-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.toLowerCase().trim(), source: "footer" }),
+      const { error } = await supabase.from("early_access_signups").insert({
+        email: email.toLowerCase().trim(),
+        source: "footer",
       });
-      setState(res.ok || res.status === 409 ? "done" : "error");
+      // Duplicate is fine — user is already signed up
+      if (error && error.code !== "23505") throw error;
+      setState("done");
     } catch {
       setState("error");
     }

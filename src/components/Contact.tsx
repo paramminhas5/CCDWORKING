@@ -47,12 +47,12 @@ const Contact = () => {
     setBusy(true);
     try {
       const composed = `[${parsed.data.reason}] ${parsed.data.message}`;
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: parsed.data.name, email: parsed.data.email, message: composed, website }),
+      const { error } = await supabase.from("contact_messages").insert({
+        name: parsed.data.name,
+        email: parsed.data.email,
+        message: composed,
       });
-      if (!res.ok) throw new Error("send failed");
+      if (error) throw new Error(error.message);
       toast.success("Message sent! We'll be in touch.");
       setSent(true);
       setForm({ name: "", email: "", message: "", reason: REASONS[0] });

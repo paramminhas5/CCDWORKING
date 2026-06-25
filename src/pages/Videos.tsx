@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -21,12 +22,14 @@ const VideosPage = () => {
     let cancelled = false;
     (async () => {
       try {
-        // youtube-videos route now serves from site_videos table
-        const res = await fetch("/api/youtube-videos");
-        const j = await res.json();
+        const { data, error } = await supabase.from("site_videos").select("*").order("sort_order");
         if (cancelled) return;
-        if (!j?.videos?.length) { setError(true); return; }
-        setVideos(j.videos as Video[]);
+        if (error || !data?.length) { setError(true); return; }
+        setVideos(data.map((v: any) => ({
+          id: v.youtube_id,
+          title: v.title,
+          thumbnail: v.thumbnail_url ?? `https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg`,
+        })));
       } catch {
         if (!cancelled) setError(true);
       }
