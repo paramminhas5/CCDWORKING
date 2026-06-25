@@ -6,10 +6,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://nrzgyippztzenoyrtszr.supabase.co",
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? "",
-  },
   reactStrictMode: true,
   images: {
     remotePatterns: [
@@ -17,26 +13,17 @@ const nextConfig = {
       { protocol: "https", hostname: "cdn.shopify.com" },
       { protocol: "https", hostname: "**.myshopify.com" },
       { protocol: "https", hostname: "img.youtube.com" },
-      { protocol: "https", hostname: "**.behold.pictures" },
-      { protocol: "https", hostname: "feeds.behold.so" },
       { protocol: "https", hostname: "catscandance.com" },
-      { protocol: "https", hostname: "**.instagram.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "**" },
     ],
   },
   webpack(config) {
-    // SVGs: Next.js default handling treats them as static assets.
-    // No SVGR needed — all SVG imports work with next/image and <img>.
     return config;
   },
   async headers() {
     if (process.env.NODE_ENV === "production") return [];
     return [{ source: "/(.*)", headers: [{ key: "Cache-Control", value: "no-store" }] }];
-  },
-  experimental: {
-    workerThreads: false,
-    cpus: 2,
   },
 };
 export default nextConfig;
