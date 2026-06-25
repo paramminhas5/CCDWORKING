@@ -70,7 +70,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
       "India's first curated pet lifestyle festival meets underground dance music. The first chapter — outdoor pet zone from 4 PM with activities, vendor market, portrait booth, and lookalike contest. Then Startdawg b2b Merman take the floor at 9. The pack meets for the first time.",
     lineup: ["Startdawg", "Merman", "TBA"],
     status: "upcoming",
-    poster_url: null,
+    poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
     sort_order: 1,
     series: "ccdxsocial",
     series_label: "CCD × SOCIAL",

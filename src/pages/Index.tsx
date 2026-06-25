@@ -78,7 +78,7 @@ const Index = () => {
             </p>
             <div className="w-full max-w-md mx-auto mb-6">
               <img
-                src="/episodes/episode-01.png"
+                src="https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg"
                 alt="CCD×SOCIAL Episode 01 — Sun 29 Jun, Indiranagar Social"
                 className="w-full h-auto border-4 border-cream/20"
               />
