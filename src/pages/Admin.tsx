@@ -1,14 +1,13 @@
 /**
- * Admin CMS — Supabase Auth + RLS.
+ * Admin CMS — Supabase Auth (email+password primary, magic link fallback).
  * 
  * Flow:
- * 1. Not signed in → show magic link sign-in form
+ * 1. Not signed in → show sign-in form (email + password, or magic link)
  * 2. Signed in but not admin → show "not authorized"
  * 3. Signed in as admin → show CMS tabs
  * 
- * Admin role is granted via app_metadata.role = "admin" in Supabase.
- * RLS policies enforce access — even if someone bypasses this UI,
- * the database won't let them read/write admin-only data.
+ * RLS policies enforce access at the database level.
+ * Password lives in Supabase Auth — not in env vars or client code.
  */
 "use client";
 
@@ -18,6 +17,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { User } from "@supabase/supabase-js";
 
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Event {
   id?: string;
@@ -26,15 +26,9 @@ interface Event {
   date: string;
   city: string;
   venue: string;
-  blurb: string;
-  lineup: string[];
   status: string;
   poster_url: string | null;
   sort_order: number;
-  series: string | null;
-  series_label: string | null;
-  event_type: string | null;
-  pet_friendly: boolean;
 }
 
 interface Rsvp {
@@ -51,46 +45,60 @@ interface Video {
   youtube_id: string;
   title: string;
   thumbnail_url: string;
-  is_featured: boolean;
   sort_order: number;
 }
+
 
 // ── Auth Gate ─────────────────────────────────────────────────────────────────
 function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"password" | "magic">("password");
   const [loading, setLoading] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  // Check if already signed in
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) onAuth(user);
       setChecking(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) onAuth(session.user);
     });
-
     return () => subscription.unsubscribe();
   }, [onAuth]);
+
+  const signInWithPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else if (data.user) {
+      onAuth(data.user);
+    }
+  };
 
   const sendMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/admin`,
-      },
+      options: { emailRedirectTo: `${siteUrl}/admin` },
     });
     setLoading(false);
     if (error) {
       toast.error(error.message);
     } else {
-      setSent(true);
+      setMagicSent(true);
       toast.success("Check your email for the sign-in link");
     }
   };
@@ -107,43 +115,45 @@ function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
     <div className="min-h-screen bg-ink flex items-center justify-center p-4">
       <div className="bg-cream border-4 border-ink chunk-shadow p-8 max-w-sm w-full">
         <h1 className="font-display text-3xl text-ink mb-2">CCD ADMIN</h1>
-        <p className="text-ink/60 text-sm mb-6">Sign in with your admin email to access the CMS.</p>
+        <p className="text-ink/60 text-sm mb-6">Sign in to access the CMS.</p>
 
-        {sent ? (
+        {magicSent ? (
           <div className="text-center py-4">
-            <p className="font-display text-2xl text-magenta mb-2">✓ CHECK YOUR EMAIL</p>
+            <p className="font-display text-2xl text-magenta mb-2">CHECK YOUR EMAIL</p>
             <p className="text-ink/70 text-sm">
-              We sent a sign-in link to <strong>{email}</strong>.<br />
-              Click the link to access admin.
+              Sign-in link sent to <strong>{email}</strong>.
             </p>
-            <button
-              onClick={() => setSent(false)}
-              className="mt-4 font-display text-sm text-magenta underline"
-            >
-              Use a different email
+            <button onClick={() => setMagicSent(false)} className="mt-4 font-display text-sm text-magenta underline">
+              Try again
             </button>
           </div>
+        ) : mode === "password" ? (
+          <form onSubmit={signInWithPassword}>
+            <label className="font-display text-sm text-ink mb-1 block">EMAIL</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+              className="w-full border-4 border-ink px-4 py-3 font-medium mb-3 focus:outline-none focus:bg-acid-yellow" />
+            <label className="font-display text-sm text-ink mb-1 block">PASSWORD</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow" />
+            <button type="submit" disabled={loading}
+              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
+              {loading ? "SIGNING IN..." : "SIGN IN →"}
+            </button>
+            <button type="button" onClick={() => setMode("magic")} className="mt-3 w-full text-center font-display text-xs text-ink/50 hover:text-magenta">
+              Use magic link instead
+            </button>
+          </form>
         ) : (
           <form onSubmit={sendMagicLink}>
-            <label htmlFor="admin-email" className="font-display text-sm text-ink mb-1 block">
-              EMAIL
-            </label>
-            <input
-              id="admin-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoFocus
-              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
-            >
+            <label className="font-display text-sm text-ink mb-1 block">EMAIL</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow" />
+            <button type="submit" disabled={loading}
+              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
               {loading ? "SENDING..." : "SEND MAGIC LINK →"}
+            </button>
+            <button type="button" onClick={() => setMode("password")} className="mt-3 w-full text-center font-display text-xs text-ink/50 hover:text-magenta">
+              Use password instead
             </button>
           </form>
         )}
@@ -152,6 +162,7 @@ function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
   );
 }
 
+
 // ── Not Authorized ────────────────────────────────────────────────────────────
 function NotAuthorized({ user }: { user: User }) {
   return (
@@ -159,21 +170,22 @@ function NotAuthorized({ user }: { user: User }) {
       <div className="bg-acid-yellow border-4 border-ink chunk-shadow p-8 max-w-md text-center">
         <p className="font-display text-3xl text-ink mb-3">NOT AUTHORIZED</p>
         <p className="text-ink/70 text-sm mb-4">
-          Signed in as <strong>{user.email}</strong> but this account doesn't have admin access.
+          Signed in as <strong>{user.email}</strong> but this account doesn&apos;t have admin access.
         </p>
         <p className="text-ink/50 text-xs mb-6">
-          Ask the site owner to grant admin access via Supabase dashboard.
+          Grant admin: run in Supabase SQL Editor:<br />
+          <code className="bg-ink/10 px-2 py-1 text-[10px] mt-1 inline-block">
+            UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || {`'{"role":"admin"}'`}::jsonb WHERE email = &apos;{user.email}&apos;;
+          </code>
         </p>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="bg-ink text-cream font-display text-sm px-6 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-        >
+        <button onClick={() => supabase.auth.signOut()} className="bg-ink text-cream font-display text-sm px-6 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
           SIGN OUT
         </button>
       </div>
     </div>
   );
 }
+
 
 // ── Events Tab ────────────────────────────────────────────────────────────────
 function EventsTab() {
@@ -190,7 +202,8 @@ function EventsTab() {
 
   const deleteEvent = async (id: string) => {
     if (!confirm("Delete this event?")) return;
-    await supabase.from("events").delete().eq("id", id);
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
     toast.success("Deleted");
     fetchEvents();
   };
@@ -199,34 +212,24 @@ function EventsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
-      </div>
+      <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-4 border-ink text-left">
-              <th className="font-display p-2">Title</th>
-              <th className="font-display p-2">Date</th>
-              <th className="font-display p-2">City</th>
-              <th className="font-display p-2">Status</th>
-              <th className="font-display p-2">Actions</th>
-            </tr>
-          </thead>
+          <thead><tr className="border-b-4 border-ink text-left">
+            <th className="font-display p-2">Title</th>
+            <th className="font-display p-2">Date</th>
+            <th className="font-display p-2">City</th>
+            <th className="font-display p-2">Status</th>
+            <th className="font-display p-2"></th>
+          </tr></thead>
           <tbody>
             {events.map((ev) => (
               <tr key={ev.id ?? ev.slug} className="border-b border-ink/10">
                 <td className="p-2 font-medium">{ev.title}</td>
                 <td className="p-2">{ev.date}</td>
                 <td className="p-2">{ev.city}</td>
-                <td className="p-2">
-                  <span className={`inline-block px-2 py-0.5 text-xs font-bold border-2 border-ink ${ev.status === "upcoming" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>
-                    {ev.status}
-                  </span>
-                </td>
-                <td className="p-2">
-                  <button onClick={() => deleteEvent(ev.id!)} className="text-magenta font-display text-xs hover:underline">DELETE</button>
-                </td>
+                <td className="p-2"><span className={`px-2 py-0.5 text-xs font-bold border-2 border-ink ${ev.status === "upcoming" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>{ev.status}</span></td>
+                <td className="p-2"><button onClick={() => deleteEvent(ev.id!)} className="text-magenta font-display text-xs hover:underline">DELETE</button></td>
               </tr>
             ))}
           </tbody>
@@ -235,6 +238,7 @@ function EventsTab() {
     </div>
   );
 }
+
 
 // ── RSVPs Tab ─────────────────────────────────────────────────────────────────
 function RsvpsTab() {
@@ -254,15 +258,9 @@ function RsvpsTab() {
   const slugs = [...new Set(rsvps.map((r) => r.event_slug))];
 
   const exportCsv = () => {
-    const header = "Name,Email,Plus Ones,Event,Date\n";
-    const rows = filtered.map((r) => `"${r.name}","${r.email}",${r.plus_ones},"${r.event_slug}","${r.created_at}"`).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `rsvps-${filter || "all"}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = ["Name,Email,Plus Ones,Event,Date", ...filtered.map((r) => `"${r.name}","${r.email}",${r.plus_ones},"${r.event_slug}","${r.created_at}"`)].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `rsvps-${filter || "all"}.csv`; a.click();
   };
 
   if (loading) return <p className="p-4 text-ink/60">Loading RSVPs...</p>;
@@ -276,30 +274,18 @@ function RsvpsTab() {
             <option value="">All events</option>
             {slugs.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-            EXPORT CSV
-          </button>
+          <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">EXPORT CSV</button>
         </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-4 border-ink text-left">
-              <th className="font-display p-2">Name</th>
-              <th className="font-display p-2">Email</th>
-              <th className="font-display p-2">+</th>
-              <th className="font-display p-2">Event</th>
-              <th className="font-display p-2">When</th>
-            </tr>
-          </thead>
+          <thead><tr className="border-b-4 border-ink text-left">
+            <th className="font-display p-2">Name</th><th className="font-display p-2">Email</th><th className="font-display p-2">+</th><th className="font-display p-2">Event</th><th className="font-display p-2">When</th>
+          </tr></thead>
           <tbody>
             {filtered.map((r) => (
               <tr key={r.id} className="border-b border-ink/10">
-                <td className="p-2 font-medium">{r.name}</td>
-                <td className="p-2">{r.email}</td>
-                <td className="p-2">{r.plus_ones}</td>
-                <td className="p-2 text-xs">{r.event_slug}</td>
-                <td className="p-2 text-xs text-ink/60">{new Date(r.created_at).toLocaleDateString()}</td>
+                <td className="p-2 font-medium">{r.name}</td><td className="p-2">{r.email}</td><td className="p-2">{r.plus_ones}</td><td className="p-2 text-xs">{r.event_slug}</td><td className="p-2 text-xs text-ink/60">{new Date(r.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
@@ -308,6 +294,7 @@ function RsvpsTab() {
     </div>
   );
 }
+
 
 // ── Videos Tab ────────────────────────────────────────────────────────────────
 function VideosTab() {
@@ -352,7 +339,7 @@ function VideosTab() {
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube URL or ID" className="flex-1 border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow" />
         <button type="submit" className="bg-acid-yellow text-ink font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">ADD</button>
       </form>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {videos.map((v) => (
           <div key={v.id ?? v.youtube_id} className="border-4 border-ink chunk-shadow bg-cream relative group">
             <img src={v.thumbnail_url} alt={v.title} className="w-full aspect-video object-cover" />
@@ -365,6 +352,7 @@ function VideosTab() {
   );
 }
 
+
 // ── Main Admin Component ──────────────────────────────────────────────────────
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
@@ -372,7 +360,6 @@ export default function Admin() {
 
   const handleAuth = useCallback((authedUser: User) => {
     setUser(authedUser);
-    // Check if user has admin role in app_metadata
     const role = authedUser.app_metadata?.role;
     setIsAdmin(role === "admin");
   }, []);
@@ -386,16 +373,10 @@ export default function Admin() {
         <h1 className="font-display text-2xl text-cream">CCD ADMIN</h1>
         <div className="flex items-center gap-4">
           <span className="font-display text-xs text-cream/60">{user.email}</span>
-          <button
-            onClick={() => supabase.auth.signOut().then(() => { setUser(null); setIsAdmin(false); })}
-            className="font-display text-xs text-acid-yellow hover:text-cream transition-colors"
-          >
-            SIGN OUT
-          </button>
+          <button onClick={() => supabase.auth.signOut().then(() => { setUser(null); setIsAdmin(false); })} className="font-display text-xs text-acid-yellow hover:text-cream transition-colors">SIGN OUT</button>
           <a href="/" className="font-display text-sm text-acid-yellow hover:text-cream transition-colors">← SITE</a>
         </div>
       </header>
-
       <div className="container py-8">
         <Tabs defaultValue="events" className="w-full">
           <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
@@ -403,7 +384,6 @@ export default function Admin() {
             <TabsTrigger value="rsvps" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
             <TabsTrigger value="videos" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
           </TabsList>
-
           <TabsContent value="events"><EventsTab /></TabsContent>
           <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
           <TabsContent value="videos"><VideosTab /></TabsContent>

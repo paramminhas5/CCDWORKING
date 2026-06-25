@@ -98,19 +98,16 @@ const RsvpDialog = ({ open, onOpenChange, eventSlug, eventTitle, eventDate, even
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("event_rsvps")
         .insert({
           name: parsed.data.name,
           email: parsed.data.email,
           plus_ones: parsed.data.plus_ones,
           event_slug: eventSlug,
-        })
-        .select()
-        .single();
+        });
 
       if (error) {
-        // Duplicate check (unique constraint on email+event_slug)
         if (error.code === "23505") {
           toast("You're already on the list. See you on the floor. 🐾");
           setTimeout(() => onOpenChange(false), 800);
