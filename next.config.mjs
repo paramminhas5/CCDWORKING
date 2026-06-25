@@ -26,11 +26,8 @@ const nextConfig = {
     ],
   },
   webpack(config) {
-    // Handle SVG imports via @svgr/webpack
-    config.module.rules.push({
-      test: /\.svg$/,
-      use: ["@svgr/webpack"],
-    });
+    // SVGs: Next.js default handling treats them as static assets.
+    // No SVGR needed — all SVG imports work with next/image and <img>.
     return config;
   },
   async headers() {

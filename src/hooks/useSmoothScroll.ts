@@ -1,23 +1,8 @@
-import { useEffect } from "react";
-import Lenis from "@studio-freight/lenis";
-
+/**
+ * useSmoothScroll — previously used Lenis for smooth scrolling.
+ * Removed because it caused lag/jitter with Framer Motion parallax.
+ * Native browser scrolling (with CSS scroll-behavior: smooth) is smoother.
+ */
 export const useSmoothScroll = () => {
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const lenis = new Lenis({
-      duration: 0.9,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-    let raf: number;
-    const tick = (time: number) => {
-      lenis.raf(time);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      lenis.destroy();
-    };
-  }, []);
+  // No-op — native scroll is used instead.
 };

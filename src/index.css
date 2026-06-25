@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   :root {
     /* Cats Can Dance — Brutalist palette */
     --background: 20 6% 90%;            /* stone */
