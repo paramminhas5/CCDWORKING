@@ -13,6 +13,7 @@ import { useDisco } from "@/contexts/DiscoContext";
 import DiscoBall from "@/components/DiscoBall";
 import Lasers from "@/components/Lasers";
 import { parseEventDate } from "@/lib/parse-date";
+import { imgUrl } from "@/lib/img";
 
 // next/image with priority handles critical image preloading automatically.
 // No manual preload needed.
@@ -142,7 +143,7 @@ const Hero = () => {
               style={{ x: c.x, rotate: c.rot, opacity: flankOpacity }}
               className={`${flankBase} ${c.pos}`}
             >
-              <Image src={c.src} alt="" aria-hidden priority className="w-full h-auto" />
+              <img src={imgUrl(c.src)} alt="" aria-hidden className="w-full h-auto" />
             </motion.div>
           ))}
 
