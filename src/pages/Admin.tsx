@@ -1,27 +1,22 @@
 /**
- * Admin CMS — Password-gated, direct Supabase admin client.
+ * Admin CMS — Supabase Auth + RLS.
  * 
- * Tabs: Events, RSVPs, Videos, Settings
+ * Flow:
+ * 1. Not signed in → show magic link sign-in form
+ * 2. Signed in but not admin → show "not authorized"
+ * 3. Signed in as admin → show CMS tabs
  * 
- * Scalable: add more tabs as features grow (artists, blog, promoters, etc.)
+ * Admin role is granted via app_metadata.role = "admin" in Supabase.
+ * RLS policies enforce access — even if someone bypasses this UI,
+ * the database won't let them read/write admin-only data.
  */
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const ADMIN_PASSWORD = "84838281"; // default — override via env
-
-// ── Admin Supabase client (service key, set after auth) ──────────────────────
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_KEY ?? "";
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
+import type { User } from "@supabase/supabase-js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Event {
@@ -60,35 +55,136 @@ interface Video {
   sort_order: number;
 }
 
-// ── Password Gate ─────────────────────────────────────────────────────────────
-function PasswordGate({ onAuth }: { onAuth: () => void }) {
-  const [pw, setPw] = useState("");
+// ── Auth Gate ─────────────────────────────────────────────────────────────────
+function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  // Check if already signed in
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) onAuth(user);
+      setChecking(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) onAuth(session.user);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [onAuth]);
+
+  const sendMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim().toLowerCase(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/admin`,
+      },
+    });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setSent(true);
+      toast.success("Check your email for the sign-in link");
+    }
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-ink flex items-center justify-center">
+        <p className="font-display text-cream text-lg animate-pulse">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-ink flex items-center justify-center p-4">
-      <form onSubmit={(e) => { e.preventDefault(); if (pw === ADMIN_PASSWORD) onAuth(); else toast.error("Wrong password"); }}
-        className="bg-cream border-4 border-ink chunk-shadow p-8 max-w-sm w-full">
-        <h1 className="font-display text-3xl text-ink mb-4">CCD ADMIN</h1>
-        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Password"
-          className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow" autoFocus />
-        <button type="submit" className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          ENTER →
-        </button>
-      </form>
+      <div className="bg-cream border-4 border-ink chunk-shadow p-8 max-w-sm w-full">
+        <h1 className="font-display text-3xl text-ink mb-2">CCD ADMIN</h1>
+        <p className="text-ink/60 text-sm mb-6">Sign in with your admin email to access the CMS.</p>
+
+        {sent ? (
+          <div className="text-center py-4">
+            <p className="font-display text-2xl text-magenta mb-2">✓ CHECK YOUR EMAIL</p>
+            <p className="text-ink/70 text-sm">
+              We sent a sign-in link to <strong>{email}</strong>.<br />
+              Click the link to access admin.
+            </p>
+            <button
+              onClick={() => setSent(false)}
+              className="mt-4 font-display text-sm text-magenta underline"
+            >
+              Use a different email
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={sendMagicLink}>
+            <label htmlFor="admin-email" className="font-display text-sm text-ink mb-1 block">
+              EMAIL
+            </label>
+            <input
+              id="admin-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoFocus
+              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {loading ? "SENDING..." : "SEND MAGIC LINK →"}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
 
+// ── Not Authorized ────────────────────────────────────────────────────────────
+function NotAuthorized({ user }: { user: User }) {
+  return (
+    <div className="min-h-screen bg-cream flex items-center justify-center p-4">
+      <div className="bg-acid-yellow border-4 border-ink chunk-shadow p-8 max-w-md text-center">
+        <p className="font-display text-3xl text-ink mb-3">NOT AUTHORIZED</p>
+        <p className="text-ink/70 text-sm mb-4">
+          Signed in as <strong>{user.email}</strong> but this account doesn't have admin access.
+        </p>
+        <p className="text-ink/50 text-xs mb-6">
+          Ask the site owner to grant admin access via Supabase dashboard.
+        </p>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="bg-ink text-cream font-display text-sm px-6 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+        >
+          SIGN OUT
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Events Tab ────────────────────────────────────────────────────────────────
-function EventsTab({ supabase }: { supabase: any }) {
+function EventsTab() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchEvents = useCallback(async () => {
     const { data } = await supabase.from("events").select("*").order("sort_order");
-    setEvents(data ?? []);
+    setEvents((data as Event[]) ?? []);
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
@@ -105,10 +201,6 @@ function EventsTab({ supabase }: { supabase: any }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
-        <button onClick={() => toast.info("Event editor coming soon — use Supabase dashboard for now")}
-          className="bg-acid-yellow text-ink font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          + ADD EVENT
-        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -144,18 +236,17 @@ function EventsTab({ supabase }: { supabase: any }) {
   );
 }
 
-
 // ── RSVPs Tab ─────────────────────────────────────────────────────────────────
-function RsvpsTab({ supabase }: { supabase: any }) {
+function RsvpsTab() {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
 
   const fetchRsvps = useCallback(async () => {
     const { data } = await supabase.from("event_rsvps").select("*").order("created_at", { ascending: false });
-    setRsvps(data ?? []);
+    setRsvps((data as Rsvp[]) ?? []);
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => { fetchRsvps(); }, [fetchRsvps]);
 
@@ -167,7 +258,10 @@ function RsvpsTab({ supabase }: { supabase: any }) {
     const rows = filtered.map((r) => `"${r.name}","${r.email}",${r.plus_ones},"${r.event_slug}","${r.created_at}"`).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `rsvps-${filter || "all"}.csv`; a.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rsvps-${filter || "all"}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -215,18 +309,17 @@ function RsvpsTab({ supabase }: { supabase: any }) {
   );
 }
 
-
 // ── Videos Tab ────────────────────────────────────────────────────────────────
-function VideosTab({ supabase }: { supabase: any }) {
+function VideosTab() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState("");
 
   const fetchVideos = useCallback(async () => {
     const { data } = await supabase.from("site_videos").select("*").order("sort_order");
-    setVideos(data ?? []);
+    setVideos((data as Video[]) ?? []);
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
@@ -263,12 +356,8 @@ function VideosTab({ supabase }: { supabase: any }) {
         {videos.map((v) => (
           <div key={v.id ?? v.youtube_id} className="border-4 border-ink chunk-shadow bg-cream relative group">
             <img src={v.thumbnail_url} alt={v.title} className="w-full aspect-video object-cover" />
-            <div className="p-2">
-              <p className="font-display text-xs truncate">{v.title}</p>
-            </div>
-            <button onClick={() => deleteVideo(v.id!)} className="absolute top-1 right-1 bg-magenta text-cream font-display text-[10px] px-2 py-0.5 border-2 border-ink opacity-0 group-hover:opacity-100 transition-opacity">
-              ✕
-            </button>
+            <div className="p-2"><p className="font-display text-xs truncate">{v.title}</p></div>
+            <button onClick={() => deleteVideo(v.id!)} className="absolute top-1 right-1 bg-magenta text-cream font-display text-[10px] px-2 py-0.5 border-2 border-ink opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
           </div>
         ))}
       </div>
@@ -276,56 +365,48 @@ function VideosTab({ supabase }: { supabase: any }) {
   );
 }
 
-
 // ── Main Admin Component ──────────────────────────────────────────────────────
 export default function Admin() {
-  const [authed, setAuthed] = useState(false);
-  const [supabaseClient, setSupabaseClient] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    if (authed) {
-      const client = getAdminClient();
-      if (!client) {
-        toast.error("Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY env vars.");
-      }
-      setSupabaseClient(client);
-    }
-  }, [authed]);
+  const handleAuth = useCallback((authedUser: User) => {
+    setUser(authedUser);
+    // Check if user has admin role in app_metadata
+    const role = authedUser.app_metadata?.role;
+    setIsAdmin(role === "admin");
+  }, []);
 
-  if (!authed) return <PasswordGate onAuth={() => setAuthed(true)} />;
-
-  if (!supabaseClient) {
-    return (
-      <div className="min-h-screen bg-cream p-8">
-        <h1 className="font-display text-3xl text-ink mb-4">Admin</h1>
-        <div className="bg-acid-yellow border-4 border-ink p-6 max-w-lg">
-          <p className="font-display text-lg text-ink mb-2">Supabase not configured</p>
-          <p className="text-ink/70 text-sm">
-            Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_SERVICE_KEY</code> in your environment variables to enable the admin panel.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return <AuthGate onAuth={handleAuth} />;
+  if (!isAdmin) return <NotAuthorized user={user} />;
 
   return (
     <div className="min-h-screen bg-cream">
       <header className="bg-ink border-b-4 border-ink px-6 py-4 flex items-center justify-between">
         <h1 className="font-display text-2xl text-cream">CCD ADMIN</h1>
-        <a href="/" className="font-display text-sm text-acid-yellow hover:text-cream transition-colors">← BACK TO SITE</a>
+        <div className="flex items-center gap-4">
+          <span className="font-display text-xs text-cream/60">{user.email}</span>
+          <button
+            onClick={() => supabase.auth.signOut().then(() => { setUser(null); setIsAdmin(false); })}
+            className="font-display text-xs text-acid-yellow hover:text-cream transition-colors"
+          >
+            SIGN OUT
+          </button>
+          <a href="/" className="font-display text-sm text-acid-yellow hover:text-cream transition-colors">← SITE</a>
+        </div>
       </header>
 
       <div className="container py-8">
         <Tabs defaultValue="events" className="w-full">
-          <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1">
+          <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
             <TabsTrigger value="events" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
             <TabsTrigger value="rsvps" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
             <TabsTrigger value="videos" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="events"><EventsTab supabase={supabaseClient} /></TabsContent>
-          <TabsContent value="rsvps"><RsvpsTab supabase={supabaseClient} /></TabsContent>
-          <TabsContent value="videos"><VideosTab supabase={supabaseClient} /></TabsContent>
+          <TabsContent value="events"><EventsTab /></TabsContent>
+          <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
+          <TabsContent value="videos"><VideosTab /></TabsContent>
         </Tabs>
       </div>
     </div>
