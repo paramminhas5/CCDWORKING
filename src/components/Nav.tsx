@@ -17,16 +17,16 @@ const primaryLinks = [
 ];
 
 const partnersLinks = [
-  { to: "/for-venues",    label: "For Venues"       },
-  { to: "/for-artists",   label: "For Artists"      },
-  { to: "/for-investors", label: "For Investors"    },
-  { to: "/ccdxsocial/sponsor", label: "Sponsor"    },
+  { to: "/for-venues",         label: "For Venues"    },
+  { to: "/for-artists",        label: "For Artists"   },
+  { to: "/for-investors",      label: "For Investors" },
+  { to: "/ccdxsocial/sponsor", label: "Partner"       },
 ];
 
 const moreLinks: { to: string; label: string; external?: boolean }[] = [
-  { to: "/ccdxsocial/sponsor", label: "Sponsor the Series" },
-  { to: "https://instagram.com/catscandance", label: "Instagram", external: true },
-  { to: "https://www.youtube.com/@catscandance", label: "YouTube", external: true },
+  { to: "/ccdxsocial/sponsor", label: "Partner with Us" },
+  { to: "https://instagram.com/catscan.dance", label: "Instagram", external: true },
+  { to: "https://www.youtube.com/@thesecatscandance", label: "YouTube", external: true },
 ];
 
 const scrollToEarlyAccess = () => {
@@ -133,7 +133,7 @@ const Dropdown = ({
   );
 };
 
-const Nav = () => {
+const Nav = ({ forceDark = false }: { forceDark?: boolean }) => {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
@@ -162,7 +162,7 @@ const Nav = () => {
     }
   };
 
-  const effectiveScrolled = scrolled || forceScrolledStyle;
+  const effectiveScrolled = scrolled || forceScrolledStyle || forceDark;
   const activeColor = effectiveScrolled ? "text-magenta" : "text-acid-yellow";
   const baseColor = effectiveScrolled ? "text-ink" : "text-cream";
 

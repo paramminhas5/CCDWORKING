@@ -26,7 +26,6 @@ import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Marquee from "@/components/Marquee";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
-import SafeCuratedEvents from "@/components/SafeCuratedEvents";
 
 // ── static fallback — always present, no DB needed ──────────────────────────
 const STATIC_ROWS: EventRow[] = Object.values(EVENT_ROWS).sort(
@@ -514,9 +513,6 @@ const Events = () => {
             )}
           </div>
         </section>
-
-        {/* ── 6. CURATED EVENTS from Bangalore ── */}
-        <SafeCuratedEvents />
 
         {/* ── 7. HOST CTA ── */}
         <section className="bg-ink border-t-4 border-ink py-10 md:py-14">

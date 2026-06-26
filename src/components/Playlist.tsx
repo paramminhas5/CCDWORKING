@@ -66,16 +66,14 @@ const Playlist = () => {
   useEffect(() => {
     (async () => {
       const { data } = await supabase
-        .from("site_settings")
-        .select("playlists, featured_playlist_id")
-        .eq("id", "main")
-        .maybeSingle();
-      const raw = ((data?.playlists as unknown) as any[]) ?? [];
-      const list = raw.map(normalize).filter((p) => p.embed_id || p.url);
+        .from("playlists")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      const list = (data ?? []).map(normalize).filter((p) => p.embed_id || p.url);
       if (list.length) {
         setPlaylists(list);
-        const featured = data?.featured_playlist_id;
-        setActiveId(featured && list.find((p) => p.id === featured) ? featured : list[0].id);
+        const featured = list.find((p) => (p as any).featured);
+        setActiveId(featured ? featured.id : list[0].id);
       }
     })();
   }, []);

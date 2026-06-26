@@ -159,7 +159,7 @@ export default function CcdxSocialSeries() {
         path="/ccdxsocial"
         jsonLd={jsonLd}
       />
-      <Nav />
+      <Nav forceDark />
       <ScrollCats />
 
       <main className="bg-cream text-ink relative">
