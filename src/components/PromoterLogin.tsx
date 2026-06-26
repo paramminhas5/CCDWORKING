@@ -34,7 +34,7 @@ export default function PromoterLogin({ onSuccess }: Props) {
       const data = await verifyPromoterToken(t);
       setPromoterToken(t);
       toast.success(`Welcome, ${data.promoter?.name ?? data.promoter_user?.display_name ?? "promoter"}!`);
-      onSuccess(data.promoter_user);
+      onSuccess(data.promoter_user ?? data.promoter);
     } catch (err: any) {
       toast.error(err.message === "Invalid promoter token" ? "Invalid token — check with your CCD contact" : err.message ?? "Login failed");
     } finally {

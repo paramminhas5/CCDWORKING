@@ -15,13 +15,13 @@ const ABOUT_FALLBACK = {
 
 const About = () => {
   const ref = useRef<HTMLDivElement>(null);
-  const { about: aboutRaw } = useHomeContent();
+  const homeContent = useHomeContent();
   const about = {
-    kicker:   aboutRaw?.kicker   || ABOUT_FALLBACK.kicker,
-    title:    aboutRaw?.title    || ABOUT_FALLBACK.title,
-    body:     aboutRaw?.body     || ABOUT_FALLBACK.body,
-    ctaLabel: aboutRaw?.ctaLabel || ABOUT_FALLBACK.ctaLabel,
-    ctaHref:  aboutRaw?.ctaHref  || ABOUT_FALLBACK.ctaHref,
+    kicker:   ABOUT_FALLBACK.kicker,
+    title:    homeContent.about_heading || ABOUT_FALLBACK.title,
+    body:     homeContent.about_body || ABOUT_FALLBACK.body,
+    ctaLabel: homeContent.about_cta_label || ABOUT_FALLBACK.ctaLabel,
+    ctaHref:  homeContent.about_cta_link || ABOUT_FALLBACK.ctaHref,
   };
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
