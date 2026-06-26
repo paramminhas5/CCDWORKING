@@ -67,8 +67,8 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs and cats welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Sahntam carry it through to close. Free entry, RSVP only.",
-    lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Sahntam"],
+      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs and cats welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it through to close. Free entry, RSVP only.",
+    lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Shantam"],
     status: "upcoming",
     poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
     sort_order: 1,
@@ -171,15 +171,15 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
   // ─── CCD × SOCIAL — Show 01: CCDXSOCIAL 01 ───────────────────────
 
   "ccdxsocial-01": {
-    cta_label: "RSVP — IT'S FREE →",
+    cta_label: "RSVP →",
 
     narrative:
-      "CCDXSOCIAL 01 is the first chapter — wide open, easy yes, first impression. The afternoon is yours from 4 PM: outdoor floor, vendor market, dogs welcome. Music kicks off at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Sahntam closing it out.",
+      "The first chapter. Wide open, easy yes, first impression. The afternoon is yours from 4 PM: outdoor floor, vendor market, pets welcome. Music kicks off at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Shantam closing it out.",
 
     vibe_pillars: [
-      { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Sahntam carrying the night through to close." },
+      { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carrying the night through to close." },
       { icon: "🪩", label: "FLOOR",  desc: "Outdoor floor at Indiranagar Social. Free entry, RSVP only. No dress code beyond showing up." },
-      { icon: "🐾", label: "DOGS",   desc: "Dog-friendly afternoon. Bring your pup — there's space and some ongoing fun for the four-legged." },
+      { icon: "🐾", label: "PETS",   desc: "Dogs and cats welcome all afternoon. Come with the pack." },
     ],
 
     doors_time: "4 PM",
@@ -191,7 +191,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
       { time: "6:00 PM",  what: "Agent Bugs", highlight: true },
       { time: "7:30 PM",  what: "Groovier", highlight: true },
       { time: "9:00 PM",  what: "Sartdawg", highlight: true },
-      { time: "10:30 PM", what: "Sahntam — to close", highlight: true },
+      { time: "10:30 PM", what: "Shantam — to close", highlight: true },
     ],
 
     artist_details: {
@@ -219,8 +219,8 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
         set_time: "9:00 PM – 10:30 PM",
         blurb: "",
       },
-      "Sahntam": {
-        name: "Sahntam",
+      "Shantam": {
+        name: "Shantam",
         role: "DJ",
         set_time: "10:30 PM – close",
         blurb: "Closing the night.",
@@ -240,9 +240,9 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "CCDXSOCIAL 01",
-      "29 JUN · INDIRANAGAR SOCIAL",
-      "AGENT BUGS · GROOVIER · SARTDAWG · SAHNTAM",
+      "BANGALORE · 29 JUN",
+      "INDIRANAGAR SOCIAL",
+      "AGENT BUGS · GROOVIER · SARTDAWG · SHANTAM",
       "DOORS 4 PM",
       "FREE ENTRY",
     ],
@@ -251,166 +251,44 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
   // ─── CCD × SOCIAL — Show 02: CCDXSOCIAL 02 ───────────────────────
 
   "ccdxsocial-02": {
-    cta_label: "RSVP — IT'S FREE →",
-
+    cta_label: "RSVP →",
     narrative:
-      "CCDXSOCIAL 02 is the style chapter — midsummer, outdoors, everyone looking their best. Live grooming demo on stage, a best-dressed contest for pets and parents alike, and a dedicated photography corner. When the sun drops, Startdawg b2b Merman bring the floor into the night.",
-
-    vibe_pillars: [
-      { icon: "✂️", label: "STYLE",   desc: "Live grooming demo on stage. Best-dressed contest for pets and parents." },
-      { icon: "📸", label: "LOOKS",   desc: "Dedicated style photography corner. The most content of any show this season." },
-      { icon: "🎧", label: "FLOOR",   desc: "Doors at 8, music at 9. Same residents, sharper energy." },
-    ],
-
-    doors_time: "4 PM (pet zone) · 8 PM (floor)",
-    peak_time:  "9 PM — late",
-
-    schedule: [
-      { time: "4:00 PM",  what: "Gates open · vendor market · style photography corner opens" },
-      { time: "4:30 PM",  what: "Live grooming demo on stage" },
-      { time: "5:30 PM",  what: "Best-dressed contest — pet · parent · duo categories" },
-      { time: "6:30 PM",  what: "Results · crowd vote · winners announced" },
-      { time: "7:30 PM",  what: "Pet zone wraps" },
-      { time: "8:00 PM",  what: "Doors open for the night" },
-      { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
-      { time: "11:00 PM", what: "Special guest set (TBA)" },
-      { time: "1:00 AM",  what: "Last drinks · last dance" },
-    ],
-
-    artist_details: {
-      "Startdawg": {
-        name: "Startdawg",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "startdawg",
-        blurb: "House selector with a soft spot for disco edits and the long build.",
-      },
-      "Merman": {
-        name: "Merman",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "merman",
-        blurb: "Garage, jungle, and the kind of low-end that fixes posture problems.",
-      },
-    },
-
-    venue_address:  "Social BLR (Venue TBC)",
-    venue_map_url:  "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
-    capacity:       250,
-    dress_code:     "Come dressed. Pets too.",
-    house_rules:    "Vaccinated pets only · short leads · water bowls provided",
-    price_text:     "FREE — RSVP only",
-
-    partners: [
-      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
-    ],
-
-    marquee_items: [
-      "CCDXSOCIAL 02",
-      "MIDSUMMER",
-      "27 JUL · SOCIAL BLR",
-      "BEST DRESSED",
-      "9 PM SHARP",
-    ],
+      "The second chapter. Bombay. Same easy format — outdoor afternoon, vendor market, pets welcome all day, the floor opens after dark. Lineup to be announced.",
+    vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
+    doors_time: "4 PM",
+    peak_time:  "Late",
+    price_text: "FREE — RSVP only",
+    partners: [{ name: "Social", role: "Series Partner", href: "/ccdxsocial" }],
+    marquee_items: ["BOMBAY · JULY 2026", "CCD × SOCIAL 02", "LINEUP TBA", "FREE ENTRY"],
   },
-
-  // ─── CCD × SOCIAL — Show 03: CCDXSOCIAL 03 ──────────────────────
 
   "ccdxsocial-03": {
-    cta_label: "RSVP — IT'S FREE →",
-
+    cta_label: "RSVP →",
     narrative:
-      "CCDXSOCIAL 03 is the last show before the finale — and the most physical. Two agility courses, a timed speed run, a performance contest open to any breed. The community is fully formed by now. Finale tickets drop exclusively at this event. One more show, then everything.",
-
-    vibe_pillars: [
-      { icon: "🏃", label: "AGILITY",  desc: "Two outdoor courses, timed speed runs, performance contest. Open to any breed, any age." },
-      { icon: "🎟️", label: "FINALE",   desc: "MEGA tickets drop exclusively at this show. First access for attendees only." },
-      { icon: "🎧", label: "FLOOR",    desc: "9 PM sharp. Startdawg b2b Merman one last time before the big one." },
-    ],
-
-    doors_time: "4 PM (pet zone) · 8 PM (floor)",
-    peak_time:  "9 PM — late",
-
-    schedule: [
-      { time: "4:00 PM",  what: "Gates open · pet zone begins · vendor market" },
-      { time: "4:30 PM",  what: "Agility course warm-up · meet the trainers" },
-      { time: "5:30 PM",  what: "Timed speed runs · leaderboard goes live" },
-      { time: "6:30 PM",  what: "Performance contest · best paw · fastest breed" },
-      { time: "7:00 PM",  what: "🎟️ MEGA tickets on sale — attendees only", highlight: true },
-      { time: "7:30 PM",  what: "Pet zone wraps · portrait booth final calls" },
-      { time: "8:00 PM",  what: "Doors open for the night" },
-      { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
-      { time: "11:00 PM", what: "Special guest set (TBA)" },
-      { time: "1:00 AM",  what: "Last drinks · see you at MEGA" },
-    ],
-
-    artist_details: {
-      "Startdawg": {
-        name: "Startdawg",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "startdawg",
-        blurb: "House selector with a soft spot for disco edits and the long build.",
-      },
-      "Merman": {
-        name: "Merman",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "merman",
-        blurb: "Garage, jungle, and the kind of low-end that fixes posture problems.",
-      },
-    },
-
-    venue_address:  "Social BLR (Venue TBC)",
-    venue_map_url:  "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
-    capacity:       250,
-    dress_code:     "Wear what moves. Pets in their game gear.",
-    house_rules:    "Vaccinated pets only · short leads · water bowls provided",
-    price_text:     "FREE — RSVP only",
-
-    partners: [
-      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
-    ],
-
-    marquee_items: [
-      "CCDXSOCIAL 03",
-      "AGILITY FINALS",
-      "30 AUG · SOCIAL BLR",
-      "MEGA TICKETS DROP HERE",
-      "9 PM SHARP",
-    ],
+      "The third chapter. Hyderabad. Outdoor afternoon, pets welcome, the underground takes the late slot. Lineup to be announced.",
+    vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
+    doors_time: "4 PM",
+    peak_time:  "Late",
+    price_text: "FREE — RSVP only",
+    partners: [{ name: "Social", role: "Series Partner", href: "/ccdxsocial" }],
+    marquee_items: ["HYDERABAD · AUGUST 2026", "CCD × SOCIAL 03", "LINEUP TBA", "FREE ENTRY"],
   },
 
-  // ─── CCD × SOCIAL — Grand Finale: MEGA ──────────────────────────
-
   "ccdxsocial-mega": {
-    cta_label: "GET TICKETS →",
-
+    cta_label: "RSVP →",
     narrative:
-      "MEGA is the season finale — everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. A complete DJ lineup yet to be announced. The biggest thing we've ever done, and the whole pack in one place.",
-
+      "The fourth and largest show. Delhi, large format. Outdoor floor, full lineup TBA, pets welcome. Details to follow.",
     vibe_pillars: [
-      { icon: "🎪", label: "SCALE",    desc: "Full outdoor stage. 2,000+ capacity. Pet runway and agility finals." },
-      { icon: "🎧", label: "LINEUP",   desc: "Headliner TBA. Full reveal closer to date. Resident support confirmed." },
-      { icon: "🐾", label: "THE PACK", desc: "The whole community in one place. The pups know their parents by now." },
+      { icon: "🎧", label: "MUSIC",  desc: "Full lineup to be announced. The biggest bill of the series." },
+      { icon: "🪩", label: "FLOOR",  desc: "Large format outdoor stage. Delhi." },
+      { icon: "🐾", label: "PETS",   desc: "Dogs and cats welcome." },
     ],
-
-    doors_time:  "TBA",
-    peak_time:   "TBA",
-    price_text:  "Tickets from CCDXSOCIAL 03 · General on sale soon",
-    capacity:    2000,
-
-    partners: [
-      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
-    ],
-
-    marquee_items: [
-      "MEGA",
-      "SEASON FINALE",
-      "2000+ PEOPLE",
-      "PET RUNWAY",
-      "OCTOBER 2026",
-    ],
+    doors_time: "TBA",
+    peak_time:  "TBA",
+    price_text: "Free — RSVP only",
+    capacity:   2000,
+    partners: [{ name: "Social", role: "Series Partner", href: "/ccdxsocial" }],
+    marquee_items: ["DELHI · OCTOBER 2026", "CCD × SOCIAL 04", "LINEUP TBA", "FREE ENTRY"],
   },
 };
 

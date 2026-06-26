@@ -40,7 +40,7 @@ const Videos = () => {
   }, []);
 
   return (
-    <section id="videos" className="relative bg-ink border-b-4 border-ink py-12 md:py-20 overflow-hidden">
+    <section id="videos" className="relative bg-electric-blue border-b-4 border-ink py-12 md:py-20 overflow-hidden">
       <div className="container">
         <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
           <div>
