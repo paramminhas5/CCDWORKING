@@ -27,10 +27,15 @@ const STATIC_ROWS: EventRow[] = Object.values(EVENT_ROWS).sort(
 // ── Countdown hook ────────────────────────────────────────────────────────────
 function useCountdown(target: Date | null) {
   const [t, setT] = useState({ days: 0, hours: 0, mins: 0, secs: 0, over: true });
+  // Extract a primitive number so the effect dependency compares by VALUE,
+  // not by object reference. parseEventDate() creates a new Date on every
+  // render — using the Date object directly as a dep caused an infinite loop:
+  //   render → new Date ref → effect fires → setState → render → new Date ref → …
+  const targetMs = target?.getTime() ?? null;
   useEffect(() => {
-    if (!target) return;
+    if (targetMs == null) return;
     const calc = () => {
-      const diff = target.getTime() - Date.now();
+      const diff = targetMs - Date.now();
       if (diff <= 0) return { days: 0, hours: 0, mins: 0, secs: 0, over: true };
       const s = Math.floor(diff / 1000);
       return {
@@ -44,7 +49,7 @@ function useCountdown(target: Date | null) {
     setT(calc());
     const id = setInterval(() => setT(calc()), 1000);
     return () => clearInterval(id);
-  }, [target]);
+  }, [targetMs]); // number primitive — stable across renders
   return t;
 }
 
@@ -125,7 +130,13 @@ const HomepageEvents = () => {
   const otherUpcoming = upcoming.slice(1);
 
   const poster = featured ? resolvePoster(featured.poster_url) : null;
-  const countdownTarget = featured ? parseEventDate(featured.date) : null;
+  // Memoize so parseEventDate() isn't called on every render — without this
+  // a new Date object is created each render, which (before the targetMs fix)
+  // was the direct cause of the useCountdown infinite loop.
+  const countdownTarget = useMemo(
+    () => (featured ? parseEventDate(featured.date) : null),
+    [featured?.date]
+  );
   const cd = useCountdown(countdownTarget);
 
   if (!featured && past.length === 0) return null;

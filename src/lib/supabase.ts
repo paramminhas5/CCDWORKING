@@ -37,10 +37,18 @@ if (supabaseUrl && supabaseAnonKey) {
       "Supabase features will not work. Check your .env.local or Netlify env vars."
     );
   }
+  // Use RFC 2606 reserved .invalid TLD — guaranteed to never resolve DNS.
+  // This prevents requests from accidentally reaching Supabase's servers
+  // (*.supabase.co resolves and returns "No API key found" errors).
   supabaseInstance = createClient(
-    "https://placeholder.supabase.co",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder"
+    "https://not-configured.invalid",
+    "placeholder-key-not-configured"
   );
 }
 
 export const supabase: SupabaseClient = supabaseInstance;
+
+/** True when both env vars are present and a real client was created.
+ *  Use this to guard realtime subscriptions and other features that
+ *  would spam WebSocket errors when Supabase is not configured. */
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { applyTheme, THEME_PRESETS, ThemeConfig, DEFAULT_THEME, FRONTEND_PRESET_IDS } from "@/lib/theme";
 
 const FRONTEND_IDS = FRONTEND_PRESET_IDS.filter((id) => THEME_PRESETS[id]);
@@ -68,25 +68,30 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     };
     loadCms();
 
-    // Realtime subscription — wrapped in try/catch in case channel fails
+    // Realtime subscription — only created when Supabase is fully configured.
+    // Without this guard the SDK opens a WebSocket to the placeholder URL and
+    // retries the failed connection on a loop, spamming the console with errors.
+    // The try/catch alone is not enough because WebSocket errors are async.
     let channel: any;
-    try {
-      channel = supabase
-        .channel("site_settings_theme")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "site_settings", filter: "id=eq.main" },
-          (payload) => {
-            const t = (payload.new as any)?.theme as ThemeConfig | null;
-            if (t && t.preset && THEME_PRESETS[t.preset]) {
-              cmsConfigRef.current = t;
-              if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+    if (isSupabaseConfigured) {
+      try {
+        channel = supabase
+          .channel("site_settings_theme")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "site_settings", filter: "id=eq.main" },
+            (payload) => {
+              const t = (payload.new as any)?.theme as ThemeConfig | null;
+              if (t && t.preset && THEME_PRESETS[t.preset]) {
+                cmsConfigRef.current = t;
+                if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+              }
             }
-          }
-        )
-        .subscribe();
-    } catch {
-      // Realtime not available — theme still works from defaults
+          )
+          .subscribe();
+      } catch {
+        // Realtime not available — theme still works from defaults
+      }
     }
 
     return () => {
