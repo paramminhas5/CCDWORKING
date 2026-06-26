@@ -12,7 +12,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ReactLenis, useLenis } from "lenis/react";
 import { useRouter } from "next/router";
 
@@ -59,32 +59,14 @@ function LenisHashHandler() {
 }
 
 export default function SmoothScroll({ children }: SmoothScrollProps) {
-  const [mounted, setMounted] = useState(false);
-
-  // Delay Lenis until after hydration to prevent it from interfering
-  // with initial page render and link click handling
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // During SSR and initial hydration, render children without Lenis
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
   return (
     <ReactLenis
       root
       options={{
         duration: 1.2,
         easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-        // syncTouch: false — prevents touch scrolling from feeling "stuck"
-        // on mobile. Lenis touch sync can fight with native momentum scrolling
-        // and cause the page to appear frozen.
         syncTouch: false,
-        // Ensure Lenis doesn't prevent anchor clicks from working
         prevent: (node: Element) => {
-          // Don't intercept scroll on elements inside dialogs/modals
           return node.closest("[data-lenis-prevent]") !== null;
         },
       }}
