@@ -18,6 +18,18 @@ import { imgUrl } from "@/lib/img";
 // next/image with priority handles critical image preloading automatically.
 // No manual preload needed.
 
+/** Hook to detect mobile viewport (avoids parallax computations on small screens) */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return mobile;
+}
+
 /** Returns the next upcoming event — dynamic from static content, matches real slugs */
 function useNextEvent() {
   const [next] = useState<{ title: string; date: string; venue: string; slug: string } | null>({
@@ -44,43 +56,41 @@ const Hero = () => {
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const { disco } = useDisco();
   const reduce = useReducedMotion();
+  const isMobile = useIsMobile();
   const { next, daysAway } = useNextEvent();
 
-  // Big bottom side cats (existing)
-  const leftX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-180%"]);
-  const leftY = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-30%"]);
-  const leftRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [0, -45]);
-  const rightX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "180%"]);
-  const rightY = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-30%"]);
-  const rightRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [0, 45]);
+  // Skip all parallax on mobile or when reduced motion is preferred
+  const skipParallax = reduce || isMobile;
 
-  const djY = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "18%"]);
+  // Big bottom side cats
+  const leftX = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "-180%"]);
+  const leftY = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "-30%"]);
+  const leftRot = useTransform(scrollYProgress, [0, 1], skipParallax ? [0, 0] : [0, -45]);
+  const rightX = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "180%"]);
+  const rightY = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "-30%"]);
+  const rightRot = useTransform(scrollYProgress, [0, 1], skipParallax ? [0, 0] : [0, 45]);
 
-  // Four flank cats around the wordmark — drift outward + fade
-  const tlX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-120%"]);
-  const tlRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [-12, -40]);
-  const trX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "120%"]);
-  const trRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [12, 40]);
-  const blX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-120%"]);
-  const blRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [-12, -40]);
-  const brX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "120%"]);
-  const brRot = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [12, 40]);
-  const flankOpacity = useTransform(scrollYProgress, [0, 0.6], reduce ? [1, 1] : [1, 0]);
+  const djY = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "18%"]);
+
+  // Four flank cats — simplified: only X drift + shared opacity (skip rotate to save GPU)
+  const flankDriftL = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "-120%"]);
+  const flankDriftR = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "120%"]);
+  const flankOpacity = useTransform(scrollYProgress, [0, 0.6], skipParallax ? [1, 1] : [1, 0]);
 
   // Headline scales up as cats fly out
-  const titleScale = useTransform(scrollYProgress, [0, 1], reduce ? [1, 1] : [1, 1.25]);
-  const titleY = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-6%"]);
+  const titleScale = useTransform(scrollYProgress, [0, 1], skipParallax ? [1, 1] : [1, 1.25]);
+  const titleY = useTransform(scrollYProgress, [0, 1], skipParallax ? ["0%", "0%"] : ["0%", "-6%"]);
 
-  const starRotA = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [0, 360]);
-  const starRotB = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [0, -360]);
+  const starRotA = useTransform(scrollYProgress, [0, 1], skipParallax ? [0, 0] : [0, 360]);
+  const starRotB = useTransform(scrollYProgress, [0, 1], skipParallax ? [0, 0] : [0, -360]);
 
   const flankBase = "absolute z-30 pointer-events-none drop-shadow-[6px_6px_0_hsl(var(--ink))] wiggle w-24 md:w-40";
 
   const FLANK_CATS = [
-    { id: "cap",        src: catCap,        pos: "top-[28%] left-[6%] md:top-[26%] md:left-[14%]",   x: tlX, rot: tlRot },
-    { id: "hpDance",    src: catHpDance,    pos: "top-[28%] right-[6%] md:top-[26%] md:right-[14%]", x: trX, rot: trRot },
-    { id: "headphones", src: catHeadphones, pos: "top-[52%] left-[6%] md:top-[54%] md:left-[14%]",   x: blX, rot: blRot },
-    { id: "handstand",  src: catHandstand,  pos: "top-[52%] right-[6%] md:top-[54%] md:right-[14%]", x: brX, rot: brRot },
+    { id: "cap",        src: catCap,        pos: "top-[28%] left-[6%] md:top-[26%] md:left-[14%]",   x: flankDriftL },
+    { id: "hpDance",    src: catHpDance,    pos: "top-[28%] right-[6%] md:top-[26%] md:right-[14%]", x: flankDriftR },
+    { id: "headphones", src: catHeadphones, pos: "top-[52%] left-[6%] md:top-[54%] md:left-[14%]",   x: flankDriftL },
+    { id: "handstand",  src: catHandstand,  pos: "top-[52%] right-[6%] md:top-[54%] md:right-[14%]", x: flankDriftR },
   ];
 
   return (
@@ -136,14 +146,14 @@ const Hero = () => {
             />
           </motion.div>
 
-          {/* Four flank cats bracketing the wordmark */}
+          {/* Four flank cats bracketing the wordmark — simplified transforms */}
           {FLANK_CATS.map((c) => (
             <motion.div
               key={c.id}
-              style={{ x: c.x, rotate: c.rot, opacity: flankOpacity }}
+              style={{ x: c.x, opacity: flankOpacity }}
               className={`${flankBase} ${c.pos}`}
             >
-              <img src={imgUrl(c.src)} alt="" aria-hidden className="w-full h-auto" />
+              <img src={imgUrl(c.src)} alt="" aria-hidden loading="lazy" className="w-full h-auto" />
             </motion.div>
           ))}
 

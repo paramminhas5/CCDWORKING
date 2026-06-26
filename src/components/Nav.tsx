@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import { Link, NavLink as RouterNavLink, useLocation, useNavigate } from "@/lib/compat-router";
 import { ChevronDown } from "lucide-react";
 import DiscoButton from "@/components/DiscoButton";
@@ -47,6 +48,7 @@ const Dropdown = ({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement>(null);
   const location = useLocation();
+  const router = useRouter();
   const isActive = links.some((l) => location.pathname.startsWith(l.to));
 
   useEffect(() => {
@@ -105,9 +107,10 @@ const Dropdown = ({
                           if (location.pathname === (path || "/")) {
                             scroll();
                           } else {
-                            window.history.pushState({}, "", l.to);
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                            setTimeout(scroll, 120);
+                            // Use Next.js router for navigation instead of pushState
+                            router.push(l.to).then(() => {
+                              setTimeout(scroll, 200);
+                            });
                           }
                         }
                       }}

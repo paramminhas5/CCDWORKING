@@ -86,10 +86,19 @@ export function useSearchParams(): [URLSearchParams, (params: URLSearchParams) =
 
 export function useLocation() {
   const router = useRouter();
+  // Derive search and hash from router.asPath to avoid SSR/client hydration
+  // mismatch — window.location is not available on the server and would cause
+  // the initial render to differ from the server-rendered HTML.
+  const asPath = router.asPath || "/";
+  const qIdx = asPath.indexOf("?");
+  const hIdx = asPath.indexOf("#");
+  const search = qIdx >= 0 ? asPath.slice(qIdx, hIdx >= 0 ? hIdx : undefined) : "";
+  const hash = hIdx >= 0 ? asPath.slice(hIdx) : "";
+
   return {
     pathname: router.pathname,
-    search: typeof window !== "undefined" ? window.location.search : "",
-    hash: typeof window !== "undefined" ? window.location.hash : "",
+    search,
+    hash,
     state: null,
   };
 }

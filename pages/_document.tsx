@@ -53,10 +53,30 @@ export default function Document() {
         <meta name="twitter:site" content="@catscandance" />
         <meta name="twitter:image" content="https://catscandance.com/og-image.jpg?v=2" />
 
-        {/* Fonts */}
+        {/* Fonts — loaded non-blocking via preload + swap pattern.
+            The rel="preload" fetches the CSS early without blocking render.
+            The onLoad handler swaps it to a stylesheet once downloaded.
+            The noscript fallback ensures fonts load without JS. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+        <link
+          rel="preload"
+          as="style"
+          href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Space+Grotesk:wght@400;500;700&display=swap"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Space+Grotesk:wght@400;500;700&display=swap"
+          media="print"
+          // @ts-ignore — onLoad swaps media to "all" after download, making it non-blocking
+          onLoad="this.media='all'"
+        />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Space+Grotesk:wght@400;500;700&display=swap"
+          />
+        </noscript>
         <link rel="preconnect" href="https://i.ytimg.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="//cdn.shopify.com" />
 

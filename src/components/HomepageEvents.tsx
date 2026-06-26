@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "@/lib/compat-router";
 import { supabase } from "@/lib/supabase";
@@ -50,16 +50,26 @@ function useCountdown(target: Date | null) {
 
 const Pad = (n: number) => String(n).padStart(2, "0");
 
-// ── Poster resolver ───────────────────────────────────────────────────────────
+// ── Poster resolver (memoized) ───────────────────────────────────────────────
+// Cache resolved poster URLs to avoid redundant Supabase storage calls
+const posterCache = new Map<string, string | null>();
+
 function resolvePoster(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
   if (v.startsWith("http") || v.startsWith("/")) return v;
+
+  // Check cache first
+  if (posterCache.has(v)) return posterCache.get(v)!;
+
   try {
     const { data } = supabase.storage.from("posters").getPublicUrl(v);
-    return data?.publicUrl ?? null;
+    const url = data?.publicUrl ?? null;
+    posterCache.set(v, url);
+    return url;
   } catch {
+    posterCache.set(v, null);
     return null;
   }
 }
@@ -67,21 +77,39 @@ function resolvePoster(raw: string | null | undefined): string | null {
 // ── Component ─────────────────────────────────────────────────────────────────
 const HomepageEvents = () => {
   const [events, setEvents] = useState<EventRow[]>(STATIC_ROWS);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    // Abort previous request if component re-mounts
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Timeout: if Supabase doesn't respond in 5s, keep static fallback.
+    // This prevents the placeholder client from causing an indefinite hang.
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     (async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("events")
           .select("*")
-          .order("sort_order", { ascending: true });
-        if (data && data.length > 0) {
+          .order("sort_order", { ascending: true })
+          .abortSignal(controller.signal);
+        if (!error && data && data.length > 0 && !controller.signal.aborted) {
           setEvents(data as unknown as EventRow[]);
         }
       } catch {
-        // Static fallback stays
+        // Static fallback stays — this fires on abort or network error
+      } finally {
+        clearTimeout(timeout);
       }
     })();
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   const upcoming = useMemo(() => events.filter((e) => e.status === "upcoming"), [events]);

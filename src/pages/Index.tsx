@@ -5,19 +5,25 @@
  *   Nav → Hero → Identity strip → About → Early Access →
  *   HomepageEvents (single unified section) →
  *   Videos → Playlist → Drops → Contact → Footer
+ *
+ * Performance: Hero + Nav load eagerly (above-the-fold).
+ * Everything below the fold is lazy-loaded to reduce initial JS bundle.
  */
 import { lazy, Suspense, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useLocation } from "@/lib/compat-router";
 import Nav from "@/components/Nav";
 import Hero from "@/components/Hero";
-import MarqueeBySlot from "@/components/MarqueeBySlot";
-import About from "@/components/About";
-import HomepageEvents from "@/components/HomepageEvents";
-import Contact from "@/components/Contact";
-import Footer from "@/components/Footer";
-import SectionReveal from "@/components/SectionReveal";
 import SEO from "@/components/SEO";
-import MoonwalkCat from "@/components/MoonwalkCat";
+
+// Below-the-fold components — loaded after initial paint
+const MarqueeBySlot = dynamic(() => import("@/components/MarqueeBySlot"), { ssr: false });
+const About = dynamic(() => import("@/components/About"));
+const HomepageEvents = dynamic(() => import("@/components/HomepageEvents"), { ssr: false });
+const Contact = dynamic(() => import("@/components/Contact"));
+const Footer = dynamic(() => import("@/components/Footer"));
+const SectionReveal = dynamic(() => import("@/components/SectionReveal"));
+const MoonwalkCat = dynamic(() => import("@/components/MoonwalkCat"), { ssr: false });
 
 const Playlist = lazy(() => import("@/components/Playlist"));
 const Drops = lazy(() => import("@/components/Drops"));
