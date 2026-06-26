@@ -165,18 +165,18 @@ const Events = () => {
         {/* ── 1. HERO ── */}
         <PageHero
           eyebrow="EVENTS"
-          title="NIGHTS THAT MOVE."
+          title="PULL UP. BRING THE DOG."
           bg="bg-magenta"
           textColor="text-cream"
           eyebrowColor="text-acid-yellow"
           shadowColor="hsl(var(--ink))"
         >
           <p className="text-cream/90 font-display text-2xl md:text-3xl mb-2">
-            UNDERGROUND. LOUD. OURS.
+            AND THE CAT. AND THE CREW.
           </p>
           <p className="text-cream/80 font-medium text-lg max-w-xl">
-            The cult underground series — house, disco, garage, jungle &amp; D&amp;B.
-            Every drop, every floor, every city.
+            CCD × Social — four cities, free entry, real music.
+            No dress code, no posture, dogs and cats welcome.
           </p>
         </PageHero>
 
@@ -184,13 +184,12 @@ const Events = () => {
         <Marquee
           bg="bg-acid-yellow"
           items={[
-            "CCDXSOCIAL 01 · 29 JUN",
-            "CCDXSOCIAL 02 · 27 JUL",
-            "CCDXSOCIAL 03 · 30 AUG",
-            "MEGA · OCT 2026",
-            "PETS WELCOME",
+            "BANGALORE · 29 JUN",
+            "BOMBAY · JULY",
+            "HYDERABAD · AUGUST",
+            "DELHI · OCTOBER",
+            "DOGS & CATS WELCOME",
             "FREE RSVP",
-            "9 PM SHARP",
           ]}
         />
 
@@ -209,8 +208,8 @@ const Events = () => {
                   CCD × SOCIAL
                 </h2>
                 <p className="text-cream/80 font-medium text-base md:text-lg mt-3 max-w-xl">
-                  India's first curated pet lifestyle series meets underground dance music.
-                  Four shows. One season. The pack in one place.
+                  Four Sundays across four cities. Easy afternoons, real floors, good music.
+                  Dogs and cats welcome at every stop.
                 </p>
               </div>
               <Link
@@ -224,15 +223,14 @@ const Events = () => {
             {/* Series show cards — 4 up */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {seriesEvents.map((e, i) => {
-                const isFinale = !!e.is_finale;
                 const isPast   = e.status === "past";
                 const palettes = [
                   "bg-acid-yellow text-ink",
                   "bg-magenta text-cream",
                   "bg-cream text-ink",
-                  "bg-magenta text-cream",
+                  "bg-ink text-cream",
                 ];
-                const pal = isFinale ? "bg-magenta text-cream" : palettes[i % palettes.length];
+                const pal = palettes[i % palettes.length];
                 return (
                   <motion.div
                     key={e.slug}
@@ -245,12 +243,7 @@ const Events = () => {
                       to={`/events/${e.slug}`}
                       className={`relative block border-4 border-ink chunk-shadow p-5 md:p-6 h-full hover:-translate-y-1 hover:translate-x-1 transition-transform ${pal}`}
                     >
-                      {isFinale && (
-                        <span className="absolute -top-3 -right-3 rotate-6 bg-acid-yellow text-ink font-display text-[10px] tracking-widest px-2 py-1 border-4 border-ink">
-                          ★ FINALE
-                        </span>
-                      )}
-                      <p className={`font-display text-[10px] tracking-widest mb-2 ${isFinale ? "text-acid-yellow" : isPast ? "text-ink/50" : "text-magenta"}`}>
+                      <p className={`font-display text-[10px] tracking-widest mb-2 ${isPast ? "text-ink/50" : "text-magenta"}`}>
                         {isPast ? "/ PAST" : "/ UPCOMING"}
                       </p>
                       <h3 className="font-display text-2xl md:text-3xl leading-none mb-2 break-words">
@@ -259,7 +252,7 @@ const Events = () => {
                       <p className="font-medium text-sm opacity-90 leading-tight mb-3">{e.date}</p>
                       <p className="font-medium text-sm opacity-70 leading-tight">{e.venue}</p>
                       {e.series_tagline && (
-                        <p className={`mt-4 text-[10px] font-display tracking-widest ${isFinale ? "text-acid-yellow/80" : "opacity-50"}`}>
+                        <p className="mt-4 text-[10px] font-display tracking-widest opacity-50">
                           {e.series_tagline}
                         </p>
                       )}
