@@ -4,10 +4,10 @@
  * Two halves:
  *
  * CCD × SOCIAL — Season 1 show structure:
- *   Show 01 · 29 Jun 2026 → CCDXSOCIAL 01   (broad, welcoming, first impression)
- *   Show 02 · 27 Jul 2026 → CCDXSOCIAL 02   (style, fashion, summer energy)
- *   Show 03 · 30 Aug 2026 → CCDXSOCIAL 03   (agility, performance, pre-finale)
- *   Grand Finale · Oct 2026 → MEGA          (large format, season closer)
+ *   Show 01 · 29 Jun 2026 → BANGALORE   (broad, welcoming, first impression)
+ *   Show 02 · Jul 2026    → BOMBAY      (style, midsummer energy)
+ *   Show 03 · Aug 2026    → HYDERABAD   (the third chapter)
+ *   Show 04 · Oct 2026    → DELHI       (fourth and largest show)
  *
  * Past episodes:
  *   CCD AT BAR WILD · 2 Apr 2025 → Bar Wild, Indiranagar
@@ -29,9 +29,9 @@ const DEFAULT_VIBE_PILLARS_STANDARD: VibePillar[] = [
 ];
 
 const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
-  { icon: "🐾", label: "PETS",   desc: "Outdoor pet zone with activities, agility tasters, and a portrait booth — runs all afternoon." },
-  { icon: "🎧", label: "FLOOR",  desc: "Doors open at 8. Music kicks in at 9 with Startdawg b2b Merman + a special guest." },
-  { icon: "🛍️", label: "MARKET", desc: "Curated vendor market: pet-first brands, streetwear, food, and CCD drops." },
+  { icon: "🎧", label: "MUSIC",   desc: "Underground selectors from each city — open decks, residents, and guests carrying the floor." },
+  { icon: "🪩", label: "FLOOR",   desc: "Outdoor afternoon into the evening. Easy format, no dress code, real sound." },
+  { icon: "🐾", label: "PETS",    desc: "Dogs and cats welcome. Pet-friendly all afternoon." },
 ];
 
 // ──────────────────── Static fallback rows ────────────────────
@@ -62,12 +62,12 @@ export const EVENT_ROWS: Record<string, EventRow> = {
 
   "ccdxsocial-01": {
     slug: "ccdxsocial-01",
-    title: "CCDXSOCIAL 01",
+    title: "BANGALORE",
     date: "Sun, Jun 29, 2026",
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Sahntam carry it through to close. Free entry, RSVP only.",
+      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs and cats welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Sahntam carry it through to close. Free entry, RSVP only.",
     lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Sahntam"],
     status: "upcoming",
     poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
@@ -82,13 +82,13 @@ export const EVENT_ROWS: Record<string, EventRow> = {
 
   "ccdxsocial-02": {
     slug: "ccdxsocial-02",
-    title: "CCDXSOCIAL 02",
-    date: "Sun, Jul 27, 2026",
-    city: "Bangalore",
-    venue: "Social BLR (TBC)",
+    title: "BOMBAY",
+    date: "July 2026",
+    city: "Bombay",
+    venue: "Social, Bombay (TBC)",
     blurb:
-      "The style chapter. Midsummer, outdoors, everyone at their best. Live grooming demo on stage, best-dressed contest for pets and parents, dedicated photography corner. Startdawg b2b Merman bring the floor into the night.",
-    lineup: ["Startdawg", "Merman", "TBA"],
+      "The second chapter. Bombay brings its own energy. Dogs and cats welcome, vendor market, an easy afternoon before the floor opens up for the night.",
+    lineup: ["TBA"],
     status: "upcoming",
     poster_url: null,
     sort_order: 2,
@@ -96,19 +96,19 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     series_label: "CCD × SOCIAL",
     event_type: "ccdxsocial",
     pet_friendly: true,
-    series_tagline: "STYLE · FASHION · MIDSUMMER ENERGY",
+    series_tagline: "BOMBAY · CCD × SOCIAL",
     is_finale: false,
   },
 
   "ccdxsocial-03": {
     slug: "ccdxsocial-03",
-    title: "CCDXSOCIAL 03",
-    date: "Sun, Aug 30, 2026",
-    city: "Bangalore",
-    venue: "Social BLR (TBC)",
+    title: "HYDERABAD",
+    date: "August 2026",
+    city: "Hyderabad",
+    venue: "Social, Hyderabad (TBC)",
     blurb:
-      "The most physical show. Two agility courses, timed speed runs, performance contest open to any breed. MEGA tickets drop exclusively at this event. One more show, then everything.",
-    lineup: ["Startdawg", "Merman", "TBA"],
+      "The third chapter. Hyderabad's turn. Same easy format — outdoor afternoon, pets welcome, the floor opens after dark.",
+    lineup: ["TBA"],
     status: "upcoming",
     poster_url: null,
     sort_order: 3,
@@ -116,19 +116,19 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     series_label: "CCD × SOCIAL",
     event_type: "ccdxsocial",
     pet_friendly: true,
-    series_tagline: "AGILITY · PERFORMANCE · PRE-FINALE",
+    series_tagline: "HYDERABAD · CCD × SOCIAL",
     is_finale: false,
   },
 
   "ccdxsocial-mega": {
     slug: "ccdxsocial-mega",
-    title: "MEGA",
-    date: "Oct 2026 — Date TBA",
-    city: "Bangalore",
-    venue: "Venue TBA — Large Format",
+    title: "DELHI",
+    date: "October 2026",
+    city: "Delhi",
+    venue: "Venue TBA",
     blurb:
-      "The season finale. Everything the series has been building to. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we've ever done. Sponsorship enquiries open now.",
-    lineup: ["Startdawg", "Merman", "Full lineup TBA"],
+      "The fourth show and the biggest one yet. Delhi, large format. Dogs and cats welcome. Full lineup TBA.",
+    lineup: ["TBA"],
     status: "upcoming",
     poster_url: null,
     sort_order: 4,
@@ -136,8 +136,8 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     series_label: "CCD × SOCIAL",
     event_type: "ccdxsocial",
     pet_friendly: true,
-    series_tagline: "SEASON FINALE · GRAND FORMAT",
-    is_finale: true,
+    series_tagline: "DELHI · CCD × SOCIAL",
+    is_finale: false,
   },
 };
 

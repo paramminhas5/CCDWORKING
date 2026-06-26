@@ -17,11 +17,12 @@
  * Props: receives `event` directly from getStaticProps (no client re-fetch needed).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/lib/compat-router";
 import { toast } from "sonner";
 
 import Nav from "@/components/Nav";
+import { useRouter } from "next/router";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import Breadcrumbs from "@/components/Breadcrumbs";
@@ -74,6 +75,12 @@ interface EventDetailProps {
 const EventDetail = ({ event, slug }: EventDetailProps) => {
   const [open, setOpen] = useState(false);
   const [lightbox, setLightbox] = useState<MediaItem | null>(null);
+  const router = useRouter();
+
+  // Auto-open RSVP dialog when arriving via ?rsvp=1 (e.g. from CcdxSocial page)
+  useEffect(() => {
+    if (router.query.rsvp) setOpen(true);
+  }, [router.query.rsvp]);
 
   // Rich content from static catalogue (schedule, narrative, vibe pillars, etc.)
   const content = useMemo(() => getEventContent(event), [event]);
@@ -355,30 +362,15 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
           </section>
         )}
 
-        {/* 6. PET ZONE */}
-        {isPet && content.schedule && (
+        {/* 6. PETS WELCOME */}
+        {isPet && (
           <section className="bg-electric-blue text-cream border-b-4 border-ink py-12 md:py-16">
-            <div className="container grid md:grid-cols-[1fr_1.2fr] gap-8 items-start">
-              <div>
-                <p className="font-display text-acid-yellow text-base mb-3">/ THE PET ZONE</p>
-                <h2 className="font-display text-cream text-4xl md:text-5xl leading-[0.9] mb-4">IT'S NOT A GIMMICK.</h2>
-                <p className="font-medium text-cream/90 text-lg leading-relaxed">
-                  CCD × SOCIAL is the first dance series in India built pet-first. The afternoon belongs to the dogs. Then the parents take the floor.
-                </p>
-              </div>
-              <div className="bg-cream text-ink border-4 border-ink chunk-shadow p-5">
-                <p className="font-display text-magenta text-xs tracking-widest mb-4">/ PET-ZONE TIMELINE</p>
-                <ul className="space-y-3">
-                  {content.schedule
-                    .filter((s) => /\d\s*PM/i.test(s.time) ? parseInt(s.time, 10) < 8 : false)
-                    .map((s) => (
-                      <li key={s.time} className="flex items-baseline gap-3 border-b-2 border-ink/10 pb-3 last:border-b-0">
-                        <span className="font-display text-base tabular-nums text-magenta shrink-0 w-20">{s.time}</span>
-                        <span className="font-medium text-ink/85 leading-snug">{s.what}</span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
+            <div className="container">
+              <p className="font-display text-acid-yellow text-base mb-3">/ PETS WELCOME</p>
+              <h2 className="font-display text-cream text-4xl md:text-5xl leading-[0.9] mb-4">BRING THE WHOLE PACK.</h2>
+              <p className="font-medium text-cream/90 text-lg leading-relaxed max-w-2xl">
+                Dogs and cats welcome all afternoon. Easy outdoor floor, good people, the right energy.
+              </p>
             </div>
           </section>
         )}

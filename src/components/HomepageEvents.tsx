@@ -142,7 +142,7 @@ const HomepageEvents = () => {
   if (!featured && past.length === 0) return null;
 
   return (
-    <section className="bg-ink border-b-4 border-ink py-14 md:py-20">
+    <section className="bg-electric-blue border-b-4 border-ink py-14 md:py-20">
       <div className="container">
 
         {/* ═══════════════════════════════════════════════════════════════════

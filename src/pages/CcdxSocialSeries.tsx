@@ -69,41 +69,41 @@ const ARTISTS = ["SARTDAWG", "MERMAN", "DJAZZ", "HEDZ", "KAMARI", "VISHNU", "TAN
 const STOPS = [
   {
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
-    date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The launch · where it all begins",
-    desc: "Our home crowd, our first room. Outdoor pet zone from 4 PM with a vendor market, lookalike contest and portrait booth — dance floor opens inside at 8.",
-    lineup: "Startdawg · Merman · TBA", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
+    date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
+    desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
+    lineup: "Agent Bugs · Groovier · Sartdawg · Sahntam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
   },
   {
-    num: "02", slug: "ccdxsocial-02", city: "MUMBAI", venue: "Antisocial, Khar",
-    date: "Sun, 27 Jul 2026 · 4 PM till late", tagline: "The style stop · midsummer energy",
-    desc: "Mumbai brings the looks. Best-dressed contest (pets included), live grooming demo, and a photo corner that doubles as a portrait studio.",
-    lineup: "Tansane · Merman · Taco", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
+    num: "02", slug: "ccdxsocial-02", city: "BOMBAY", venue: "Social, Bombay (TBC)",
+    date: "July 2026", tagline: "The second show · Bombay energy",
+    desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, vendor market, dogs and cats welcome, the floor opens after dark.",
+    lineup: "Lineup TBA", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: MUM_POSTER,
   },
   {
-    num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social Mindspace, Hyderabad",
-    date: "Sun, 30 Aug 2026 · 4 PM till late", tagline: "The agility stop · pre-finale",
-    desc: "The most physical edition. Two agility courses, timed speed runs, performance contest. Hyderabad's underground takes the late slot.",
+    num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social, Hyderabad (TBC)",
+    date: "August 2026", tagline: "The third show · Hyderabad",
+    desc: "The series hits Hyderabad. Outdoor afternoon, pets welcome, real music. The underground takes the late slot.",
     lineup: "Lineup TBA", bg: "bg-ink", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: HYD_POSTER,
   },
   {
-    num: "★", slug: "ccdxsocial-mega", city: "DELHI / NCR", venue: "Venue TBA — large format",
-    date: "October 2026 (date soon)", tagline: "The grand finale · season closer",
-    desc: "Everything the tour has been building toward. Outdoor stage, pet runway, agility finals, full lineup. One last Sunday with the whole pack in one place.",
-    lineup: "Headliner + residents + guests from every city", bg: "bg-acid-yellow", text: "text-ink", accent: "text-magenta",
-    badge: "finale" as const, poster: null,
+    num: "04", slug: "ccdxsocial-mega", city: "DELHI", venue: "Venue TBA",
+    date: "October 2026", tagline: "The fourth show · large format",
+    desc: "The biggest one yet. Delhi, large format, full lineup. Dogs and cats welcome. Date and venue to be announced.",
+    lineup: "Full lineup TBA", bg: "bg-acid-yellow", text: "text-ink", accent: "text-magenta",
+    badge: null, poster: null,
   },
 ];
 
 
 // ── What to expect ────────────────────────────────────────────────────────────
 const EXPECT = [
-  { eyebrow: "4–8 PM", title: "THE AFTERNOON", body: "Outdoor pet zone. Agility course, portrait booth, treat bar, vendor market, lookalike + best-dressed contests rotating each city. Bring your pet or just come hang.", bg: "bg-electric-blue", text: "text-cream", emoji: "🐾" },
-  { eyebrow: "8 PM TILL LATE", title: "THE EVENING", body: "Dance floor opens inside. Residents + rotating guests, late till close.", bg: "bg-magenta", text: "text-cream", emoji: "🎧" },
-  { eyebrow: "THE VIBE", title: "EASY SUNDAY", body: "No dress code, no posture. Free water and treat stations all day. Come for the pets, stay for the music — or the other way round.", bg: "bg-acid-yellow", text: "text-ink", emoji: "☀️" },
-  { eyebrow: "WHO IT'S FOR", title: "THE PACK", body: "Pet parents, music heads, friends of both, and anyone who wants a different kind of Sunday. Free entry on RSVP. Pets welcome at every stop.", bg: "bg-cream", text: "text-ink", emoji: "💛" },
+  { eyebrow: "4 PM ONWARDS", title: "THE AFTERNOON", body: "Outdoor floor, vendor market, easy Sunday energy. Dogs and cats welcome all afternoon — bring the whole pack or just yourself.", bg: "bg-electric-blue", text: "text-cream", emoji: "🐾" },
+  { eyebrow: "AFTER DARK", title: "THE FLOOR", body: "Dance floor opens. Residents and rotating guests from each city, late till close.", bg: "bg-magenta", text: "text-cream", emoji: "🎧" },
+  { eyebrow: "THE VIBE", title: "EASY SUNDAY", body: "No dress code, no posture. Free water all day. Come for the pets, stay for the music — or the other way round.", bg: "bg-acid-yellow", text: "text-ink", emoji: "☀️" },
+  { eyebrow: "WHO IT'S FOR", title: "THE PACK", body: "Pet parents, music heads, friends of both, and anyone who wants a different kind of Sunday. Free entry on RSVP. Dogs and cats welcome at every stop.", bg: "bg-cream", text: "text-ink", emoji: "💛" },
 ];
 
 // ── JSON-LD ───────────────────────────────────────────────────────────────────
@@ -212,12 +212,12 @@ export default function CcdxSocialSeries() {
                         </div>
                       ))}
                     </div>
-                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 28 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
+                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 29 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <Link href="/events" className="inline-block bg-acid-yellow text-ink font-display text-base px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                    RSVP FREE →
+                  <Link href="/events/ccdxsocial-01?rsvp=1" className="inline-block bg-acid-yellow text-ink font-display text-base px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                    RSVP →
                   </Link>
                   <a href="#tour" className="inline-block bg-magenta text-cream font-display text-base px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
                     SEE THE TOUR ↓
@@ -230,7 +230,7 @@ export default function CcdxSocialSeries() {
 
 
         {/* ── MARQUEE ── */}
-        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 28 JUN", "MUMBAI JULY", "HYDERABAD AUGUST", "DELHI FINALE", "FREE ENTRY · RSVP"]} />
+        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 29 JUN", "BOMBAY JULY", "HYDERABAD AUGUST", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
 
         {/* ── HOW IT WORKS ── */}
         <section className="bg-cream py-12 md:py-16 border-b-4 border-ink relative overflow-hidden">
@@ -315,7 +315,7 @@ export default function CcdxSocialSeries() {
             <Reveal>
               <p className="font-display text-xs text-acid-yellow">/ THE TOUR</p>
               <h2 className="font-display text-4xl md:text-5xl leading-[0.9] mt-2">FOUR CITIES. ONE SUNDAY EACH.</h2>
-              <p className="text-base md:text-lg mt-3 max-w-2xl text-cream/85">Same format, different rooms. Bangalore → Mumbai → Hyderabad → Delhi finale.</p>
+              <p className="text-base md:text-lg mt-3 max-w-2xl text-cream/85">Same format, different rooms. Bangalore → Bombay → Hyderabad → Delhi.</p>
             </Reveal>
 
             <div className="relative mt-10 md:pl-12">
@@ -329,13 +329,12 @@ export default function CcdxSocialSeries() {
                     transition={{ duration: 0.55, delay: i * 0.08, ease: [0.21, 0.47, 0.32, 0.98] }}
                     className="relative pl-14 md:pl-16"
                   >
-                    <div className={`absolute left-0 top-0 w-11 h-11 md:w-12 md:h-12 grid place-items-center border-4 border-cream chunk-shadow font-display text-base z-10 ${stop.badge === "next" ? "bg-acid-yellow text-ink" : stop.badge === "finale" ? "bg-magenta text-cream" : "bg-ink text-cream"}`}>
+                    <div className={`absolute left-0 top-0 w-11 h-11 md:w-12 md:h-12 grid place-items-center border-4 border-cream chunk-shadow font-display text-base z-10 ${stop.badge === "next" ? "bg-acid-yellow text-ink" : "bg-ink text-cream"}`}>
                       {stop.num}
                     </div>
 
                     <div className={`relative ${stop.bg} ${stop.text} border-4 border-cream chunk-shadow p-5 md:p-6`}>
                       {stop.badge === "next" && <span className="absolute -top-3 left-4 bg-acid-yellow text-ink font-display text-[10px] px-2 py-1 border-2 border-ink chunk-shadow">▶ NEXT UP</span>}
-                      {stop.badge === "finale" && <span className="absolute -top-3 left-4 bg-magenta text-cream font-display text-[10px] px-2 py-1 border-2 border-ink chunk-shadow">★ GRAND FINALE</span>}
 
                       <div className="grid md:grid-cols-[1fr_auto] gap-5 md:gap-6 items-start">
                         <div>
@@ -351,8 +350,8 @@ export default function CcdxSocialSeries() {
                               <p className="font-display text-xs md:text-sm">{stop.date}</p>
                               <p className="text-[11px] opacity-80">{stop.venue}</p>
                             </div>
-                            <Link href="/events" className="inline-block bg-cream text-ink font-display text-xs px-3 py-2 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                              {stop.badge === "next" ? "RSVP FREE →" : stop.badge === "finale" ? "GET NOTIFIED →" : "RSVP →"}
+                            <Link href={stop.badge === "next" ? "/events/ccdxsocial-01?rsvp=1" : `/events/${stop.slug}`} className="inline-block bg-cream text-ink font-display text-xs px-3 py-2 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                              RSVP →
                             </Link>
                           </div>
                         </div>
@@ -383,11 +382,11 @@ export default function CcdxSocialSeries() {
             <Reveal>
               <p className="font-display text-xs text-magenta">/ HOW TO JOIN</p>
               <h2 className="font-display text-4xl md:text-6xl leading-[0.9] mt-2 max-w-3xl">NO STEPS. NO LISTS. <span className="text-magenta">JUST PULL UP.</span></h2>
-              <p className="mt-4 max-w-2xl text-base md:text-lg">RSVP free, show up Sunday, stay for the floor. Pets and friends welcome — no dress code, no cover.</p>
+              <p className="mt-4 max-w-2xl text-base md:text-lg">RSVP, show up Sunday, stay for the floor. Dogs and cats welcome — no dress code, no cover.</p>
             </Reveal>
             <Reveal delay={0.15}>
               <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="/events" className="inline-block bg-ink text-cream font-display text-base md:text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">RSVP FREE →</Link>
+                <Link href="/events/ccdxsocial-01?rsvp=1" className="inline-block bg-ink text-cream font-display text-base md:text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">RSVP →</Link>
                 <a href="https://wa.me/?text=Come%20to%20CCD%20%C3%97%20Social%20with%20me%20%E2%80%94%20https%3A%2F%2Fcatscandance.com%2Fccdxsocial" target="_blank" rel="noopener" className="inline-block bg-cream text-ink font-display text-base md:text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">BRING THE PACK →</a>
               </div>
             </Reveal>
