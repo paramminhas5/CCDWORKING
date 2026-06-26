@@ -75,6 +75,15 @@ function useCountdown(target: Date | null) {
 }
 
 
+// Map old Supabase titles to city display names — guards against stale DB data
+const TITLE_MAP: Record<string, string> = {
+  "ccdxsocial 01": "BANGALORE",
+  "ccdxsocial 02": "BOMBAY",
+  "ccdxsocial 03": "HYDERABAD",
+  "mega":          "DELHI",
+};
+const displayTitle = (t: string) => TITLE_MAP[t.toLowerCase()] ?? t.toUpperCase();
+
 // ── main component ───────────────────────────────────────────────────────────
 type FilterTab = "all" | "upcoming" | "past" | "series";
 
@@ -165,18 +174,18 @@ const Events = () => {
         {/* ── 1. HERO ── */}
         <PageHero
           eyebrow="EVENTS"
-          title="PULL UP. BRING THE DOG."
+          title="THE EVENTS."
           bg="bg-magenta"
           textColor="text-cream"
           eyebrowColor="text-acid-yellow"
           shadowColor="hsl(var(--ink))"
         >
           <p className="text-cream/90 font-display text-2xl md:text-3xl mb-2">
-            AND THE CAT. AND THE CREW.
+            UNDERGROUND. CURATED. OURS.
           </p>
           <p className="text-cream/80 font-medium text-lg max-w-xl">
-            CCD × Social — four cities, free entry, real music.
-            No dress code, no posture, dogs and cats welcome.
+            The best electronic music nights in India — house, disco, garage, jungle, D&amp;B.
+            Every event handpicked. Free RSVP. Pets welcome at the CCD × Social series.
           </p>
         </PageHero>
 
@@ -188,7 +197,7 @@ const Events = () => {
             "BOMBAY · JULY",
             "HYDERABAD · AUGUST",
             "DELHI · OCTOBER",
-            "DOGS & CATS WELCOME",
+            "UNDERGROUND · CURATED",
             "FREE RSVP",
           ]}
         />
@@ -208,8 +217,8 @@ const Events = () => {
                   CCD × SOCIAL
                 </h2>
                 <p className="text-cream/80 font-medium text-base md:text-lg mt-3 max-w-xl">
-                  Four Sundays across four cities. Easy afternoons, real floors, good music.
-                  Dogs and cats welcome at every stop.
+                  Four Sundays across four cities. Easy outdoor afternoons, real underground floors
+                  after dark. Pets welcome at every stop.
                 </p>
               </div>
               <Link
@@ -247,7 +256,7 @@ const Events = () => {
                         {isPast ? "/ PAST" : "/ UPCOMING"}
                       </p>
                       <h3 className="font-display text-2xl md:text-3xl leading-none mb-2 break-words">
-                        {e.title.toUpperCase()}
+                        {displayTitle(e.title)}
                       </h3>
                       <p className="font-medium text-sm opacity-90 leading-tight mb-3">{e.date}</p>
                       <p className="font-medium text-sm opacity-70 leading-tight">{e.venue}</p>

@@ -54,7 +54,19 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
     event = getStaticEventRow(slug);
   }
 
-  // 3. Unknown slug → 404
+  // 3. For known slugs, always prefer static lineup + title over stale Supabase data.
+  //    This ensures the correct artists and city names show even when the DB
+  //    hasn't been updated yet.
+  const staticRow = getStaticEventRow(slug);
+  if (staticRow && event) {
+    event = {
+      ...event,
+      title:  staticRow.title,
+      lineup: staticRow.lineup ?? event.lineup,
+    };
+  }
+
+  // 4. Unknown slug → 404
   if (!event) {
     return { notFound: true };
   }

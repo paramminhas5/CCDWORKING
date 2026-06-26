@@ -33,7 +33,7 @@ function useIsMobile() {
 /** Returns the next upcoming event — dynamic from static content, matches real slugs */
 function useNextEvent() {
   const [next] = useState<{ title: string; date: string; venue: string; slug: string } | null>({
-    title: "CCD×SOCIAL 01",
+    title: "BANGALORE — CCD × SOCIAL",
     date: "Sun, Jun 29, 2026",
     venue: "Social, Indiranagar",
     slug: "ccdxsocial-01",

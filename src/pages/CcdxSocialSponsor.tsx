@@ -6,53 +6,52 @@ import SEO from "@/components/SEO";
 import PartnerContactDialog from "@/components/PartnerContactDialog";
 import { Link } from "@/lib/compat-router";
 
-// ── Sponsor tier data ─────────────────────────────────────────────────────────
+// ── Partnership tier data ──────────────────────────────────────────────────────
 const TIERS = [
   {
     slug: "series-partner",
     name: "SERIES PARTNER",
     icon: "🐾",
-    scope: "All 3 shows + Grand Finale",
+    scope: "All 4 shows",
     color: "bg-electric-blue text-cream",
     chipColor: "bg-acid-yellow text-ink",
     price: "Full series",
     headline: "Be the name everyone remembers",
     deliverables: [
       "Headline logo on all event materials — posters, socials, stage",
-      "Dedicated activation booth at all 3 shows + finale",
-      "Stage naming rights at grand format show",
+      "Dedicated activation space at all 4 shows",
+      "Stage naming rights at the Delhi show",
       "Co-branded content package (photo + video) from every show",
       "3 dedicated social posts + stories across CCD channels",
       "Brand mention in every RSVP confirmation email",
-      "Logo on CCD website for the full season",
-      "Option to co-brand the pet zone",
-      "2 VIP + early access passes per show",
+      "Logo on CCD website for the full series",
+      "2 guest passes per show",
     ],
     cta: "Best fit for: pet brands, lifestyle brands, beverages, outdoor brands wanting max reach",
   },
   {
-    slug: "show-sponsor",
-    name: "SHOW SPONSOR",
+    slug: "show-partner",
+    name: "SHOW PARTNER",
     icon: "✦",
     scope: "One show of your choice",
     color: "bg-magenta text-cream",
     chipColor: "bg-cream text-ink",
     price: "Per show",
-    headline: "Own a single night end to end",
+    headline: "Own a single afternoon end to end",
     deliverables: [
       "Headline logo at your chosen show",
-      "Dedicated activation booth",
+      "Dedicated activation space",
       "Co-branded content package from that show",
       "1 dedicated social post + stories",
       "Brand mention in that show's RSVP emails",
       "Logo on event page for the duration",
       "2 passes to the show",
     ],
-    cta: "Best fit for: local brands, product launches, grooming & nutrition brands",
+    cta: "Best fit for: local brands, product launches, pet and lifestyle brands",
   },
   {
-    slug: "community-supporter",
-    name: "COMMUNITY SUPPORTER",
+    slug: "community-partner",
+    name: "COMMUNITY PARTNER",
     icon: "🌿",
     scope: "All shows, light touch",
     color: "bg-lime text-ink",
@@ -63,13 +62,13 @@ const TIERS = [
       "Logo across all event materials (below fold)",
       "Social tag in one round-up post per show",
       "Mention in event comms and on the website",
-      "2 passes split across the season",
+      "2 passes split across the series",
     ],
-    cta: "Best fit for: indie pet brands, local businesses, NGOs, community partners",
+    cta: "Best fit for: indie brands, local businesses, NGOs, community organisations",
   },
 ];
 
-// ── Who should sponsor ────────────────────────────────────────────────────────
+// ── Who should partner ─────────────────────────────────────────────────────────
 const WHO = [
   { icon: "🐾", label: "Pet food & nutrition brands" },
   { icon: "✂️", label: "Grooming & wellness brands" },
@@ -83,40 +82,40 @@ const WHO = [
 
 // ── Series shows data ─────────────────────────────────────────────────────────
 const SHOWS = [
-  { num: "01", name: "CCDXSOCIAL 01", date: "Sun, 29 Jun 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream", slug: "ccdxsocial-01" },
-  { num: "02", name: "CCDXSOCIAL 02", date: "Sun, 27 Jul 2026", tagline: "STYLE · FASHION · MIDSUMMER ENERGY",   bg: "bg-magenta",       text: "text-cream", slug: "ccdxsocial-02" },
-  { num: "03", name: "CCDXSOCIAL 03", date: "Sun, 30 Aug 2026", tagline: "AGILITY · FINALE PREVIEW · ONE MORE",  bg: "bg-ink",           text: "text-cream", slug: "ccdxsocial-03" },
+  { num: "01", name: "BANGALORE",  date: "Sun, 29 Jun 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream", slug: "ccdxsocial-01" },
+  { num: "02", name: "BOMBAY",     date: "July 2026",         tagline: "BOMBAY · CCD × SOCIAL",               bg: "bg-magenta",       text: "text-cream", slug: "ccdxsocial-02" },
+  { num: "03", name: "HYDERABAD",  date: "August 2026",       tagline: "HYDERABAD · CCD × SOCIAL",            bg: "bg-ink",           text: "text-cream", slug: "ccdxsocial-03" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const CcdxSocialSponsor = () => (
   <main className="bg-background text-foreground">
     <SEO
-      title="Sponsor a Show — CCDxSocial | Cats Can Dance"
-      description="Sponsor the CCDxSocial series — 3 shows end of June 2026 + grand format finale. Animal lovers + electronic music fans. Tiers from single-show to full series."
+      title="Partner with CCD × Social | Cats Can Dance"
+      description="Partner with the CCDxSocial series — 4 shows across Bangalore, Bombay, Hyderabad and Delhi. Pet-friendly outdoor afternoons and underground dance music. Reach an engaged community of pet parents and music fans."
       path="/ccdxsocial/sponsor"
     />
     <Nav />
 
     <PageHero
-      eyebrow="SPONSOR THE SERIES"
+      eyebrow="PARTNERSHIP PROPOSAL"
       title={<>BE PART OF<br />SOMETHING<br />DIFFERENT.</>}
       bg="bg-electric-blue"
       textColor="text-cream"
       eyebrowColor="text-acid-yellow"
     >
       <p className="text-cream/80 font-medium text-xl max-w-2xl mt-4">
-        3 shows + 1 grand format show. End of June 2026. Animal lovers and electronic music fans —
-        together. Own a show, own the series, or show up everywhere.
+        Four shows. Four cities. An engaged community of pet parents and music fans — together every
+        Sunday from June to October 2026. Partner a single show or the whole series.
       </p>
       <div className="flex flex-wrap gap-3 mt-6">
-        {["200 pax per show", "2,000+ at finale", "Outdoor pet zone", "Startdawg · Merman + more", "Jun–Oct 2026"].map((f) => (
+        {["~200 pax per show", "4 cities", "Pets welcome", "Jun–Oct 2026", "Free entry · RSVP only"].map((f) => (
           <span key={f} className="bg-white/10 border border-white/20 text-cream font-display text-xs px-3 py-1.5">{f}</span>
         ))}
       </div>
     </PageHero>
 
-    <Marquee bg="bg-acid-yellow" items={["CCDXSOCIAL 01", "CCDXSOCIAL 02", "CCDXSOCIAL 03", "MEGA", "JUN–OCT 2026", "SPONSOR A SHOW", "SPONSOR THE SERIES", "ANIMAL LOVERS + DANCE MUSIC"]} />
+    <Marquee bg="bg-acid-yellow" items={["BANGALORE · BOMBAY · HYDERABAD · DELHI", "JUN–OCT 2026", "PARTNER A SHOW", "PARTNER THE SERIES", "PETS + DANCE MUSIC"]} />
 
 
     {/* ── The opportunity ── */}
@@ -133,9 +132,9 @@ const CcdxSocialSponsor = () => (
             something specific, and they spend money on the things they love.
           </p>
           <p className="text-ink/70 font-medium">
-            Outdoor pet zone from 4PM with activities, vendor market, and a full DJ lineup. 
-            Approximately 200 people per show, 2,000+ at the grand finale. 
-            Your brand is not a banner — it's part of the experience.
+            Outdoor afternoon from 4 PM with a vendor market and pets welcome throughout, into an
+            underground dance floor after dark. Approximately 200 people per show, larger format in
+            Delhi. Your brand is not a banner — it's part of the experience.
           </p>        </div>
         <div className="space-y-4">
           {[
@@ -159,8 +158,9 @@ const CcdxSocialSponsor = () => (
       <div className="container">
         <p className="font-display text-acid-yellow text-xl mb-4">/ THE SERIES</p>
         <h2 className="font-display text-cream text-4xl md:text-6xl leading-[0.9] mb-10">
-          THREE SHOWS.<br />ONE GRAND FINALE.
-        </h2>        <div className="grid md:grid-cols-3 gap-0 border-4 border-ink overflow-hidden mb-4">
+          FOUR SHOWS.<br />FOUR CITIES.
+        </h2>
+        <div className="grid md:grid-cols-3 gap-0 border-4 border-ink overflow-hidden mb-4">
           {SHOWS.map((s) => (
             <div key={s.num} className={`${s.bg} ${s.text} border-r-4 border-ink last:border-r-0 p-6`}>
               <p className="font-display text-xs opacity-60 mb-2">SHOW {s.num}</p>
@@ -173,13 +173,13 @@ const CcdxSocialSponsor = () => (
         </div>
         <div className="bg-acid-yellow border-4 border-ink chunk-shadow-lg p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <span className="inline-block bg-magenta text-cream font-display text-xs px-3 py-1 border-2 border-ink mb-3">SEASON FINALE · DATE TBA</span>
-          <h3 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-2">MEGA — GRAND FORMAT SHOW</h3>
-            <p className="text-ink/70 font-medium max-w-lg">Full outdoor stage. 2,000+ people. Pet runway. Agility finals. Complete DJ lineup TBA. The biggest thing we've ever done — and the best chance for a sponsor to make a mark.</p>
+            <span className="inline-block bg-ink text-cream font-display text-xs px-3 py-1 border-2 border-ink mb-3">SHOW 04 · DATE TBA</span>
+            <h3 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-2">DELHI — LARGE FORMAT</h3>
+            <p className="text-ink/70 font-medium max-w-lg">The fourth and largest show. Full outdoor stage, larger capacity, full lineup TBA. The biggest partnership opportunity in the series.</p>
           </div>
           <div className="shrink-0 text-center">
-            <p className="font-display text-ink text-4xl mb-1">2,000+</p>
-            <p className="font-display text-ink/60 text-xs uppercase">Expected attendance</p>
+            <p className="font-display text-ink text-4xl mb-1">DELHI</p>
+            <p className="font-display text-ink/60 text-xs uppercase">October 2026</p>
           </div>
         </div>
       </div>
@@ -189,12 +189,12 @@ const CcdxSocialSponsor = () => (
     {/* ── Sponsor tiers ── */}
     <section className="bg-cream border-b-4 border-ink py-16 md:py-24">
       <div className="container">
-        <p className="font-display text-magenta text-xl mb-4">/ SPONSOR TIERS</p>
+        <p className="font-display text-magenta text-xl mb-4">/ PARTNERSHIP TIERS</p>
         <h2 className="font-display text-ink text-4xl md:text-6xl leading-[0.9] mb-4">
-          SUPPORT A SHOW.<br />OR THE WHOLE THING.
+          PARTNER A SHOW.<br />OR THE WHOLE THING.
         </h2>
         <p className="text-ink/70 font-medium text-lg max-w-2xl mb-10">
-          Pick a single show or back the whole series. Every tier includes real presence — 
+          Pick a single show or back the whole series. Every tier includes real presence —
           not a logo in a corner. We build the activation with you.
         </p>
         <div className="grid md:grid-cols-3 gap-6">
@@ -219,7 +219,7 @@ const CcdxSocialSponsor = () => (
                 <PartnerContactDialog
                   kind="sponsors"
                   defaultReason={`${tier.name} — ${tier.scope}`}
-                  defaultMessage={`Hi, I'm interested in the ${tier.name} sponsorship for the CCDxSocial series. Please send me more details.`}
+                  defaultMessage={`Hi, I'm interested in the ${tier.name} partnership for the CCDxSocial series. Please send me more details.`}
                   trigger={
                     <button type="button" className="w-full bg-ink text-cream font-display text-base px-5 py-3 border-4 border-ink hover:bg-magenta transition-colors">
                       ENQUIRE NOW →
@@ -236,7 +236,7 @@ const CcdxSocialSponsor = () => (
     {/* ── Who should sponsor ── */}
     <section className="bg-acid-yellow border-b-4 border-ink py-16 md:py-20">
       <div className="container">
-        <p className="font-display text-ink/60 text-xl mb-4">/ WHO SHOULD SPONSOR</p>
+        <p className="font-display text-ink/60 text-xl mb-4">/ WHO SHOULD PARTNER</p>
         <h2 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-10">
           YOUR BRAND BELONGS HERE<br />IF YOU CARE ABOUT THIS.
         </h2>
@@ -262,7 +262,7 @@ const CcdxSocialSponsor = () => (
             MORE THAN A LOGO.
           </h2>
           <p className="text-ink/80 font-medium text-lg">
-            Every sponsor at CCDxSocial is integrated into the experience — not pasted on top of it. 
+            Every partner at CCDxSocial is integrated into the experience — not pasted on top of it.
             We build the activation with you so it actually makes sense in the room.
           </p>
         </div>
@@ -292,23 +292,23 @@ const CcdxSocialSponsor = () => (
       <div className="container text-center">
         <p className="font-display text-acid-yellow text-xl mb-4">/ LET'S TALK</p>
         <h2 className="font-display text-cream text-5xl md:text-7xl leading-[0.85] mb-6 drop-shadow-[6px_6px_0_hsl(var(--ink))]">
-          READY TO<br />SPONSOR?
+          READY TO<br />PARTNER?
         </h2>
         <p className="text-cream/80 font-medium text-lg max-w-xl mx-auto mb-10">
-          Fill in the form and we'll get back to you within 24 hours with the full sponsorship pack.
-          All tiers are negotiable — we'd rather build something that works for both sides.
+          Fill in the form and we'll get back to you within 24 hours with the full partnership proposal.
+          All tiers are open to conversation — we'd rather build something that works for both sides.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <PartnerContactDialog
             kind="sponsors"
-            defaultReason="Sponsorship enquiry — CCDxSocial"
+            defaultReason="Partnership enquiry — CCDxSocial"
             trigger={
               <button type="button" className="bg-acid-yellow text-ink font-display text-2xl px-10 py-5 border-4 border-ink chunk-shadow-lg hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-                GET THE SPONSOR PACK →
+                GET THE PARTNERSHIP PROPOSAL →
               </button>
             }
           />
-          <a href="mailto:hello@catscandance.com?subject=CCDxSocial%20Sponsorship" className="bg-transparent text-cream font-display text-lg px-8 py-4 border-4 border-cream hover:bg-ink transition-colors">
+          <a href="mailto:hello@catscandance.com?subject=CCDxSocial%20Partnership" className="bg-transparent text-cream font-display text-lg px-8 py-4 border-4 border-cream hover:bg-ink transition-colors">
             EMAIL US DIRECTLY
           </a>
         </div>
@@ -321,7 +321,7 @@ const CcdxSocialSponsor = () => (
     {/* ── Link back ── */}
     <section className="bg-cream border-b-4 border-ink py-10">
       <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="font-display text-ink text-lg">Want to see the full partnership proposal?</p>
+        <p className="font-display text-ink text-lg">Want to see the full series overview?</p>
         <div className="flex gap-3">
           <a href="/ccdxsocial" className="bg-ink text-cream font-display text-sm px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-transform">VIEW PROPOSAL →</a>
           <Link to="/events" className="bg-cream text-ink font-display text-sm px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">SEE ALL EVENTS →</Link>
