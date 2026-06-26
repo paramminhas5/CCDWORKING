@@ -50,37 +50,49 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   // Fetch CMS theme on mount and subscribe to realtime changes
   useEffect(() => {
     const loadCms = async () => {
-      const { data } = await supabase
-        .from("site_settings")
-        .select("theme")
-        .eq("id", "main")
-        .maybeSingle();
-      const t = (data?.theme ?? null) as ThemeConfig | null;
-      if (t && t.preset && THEME_PRESETS[t.preset]) {
-        cmsConfigRef.current = t;
-        // Only auto-apply if the user has not picked their own preset
-        if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+      try {
+        const { data } = await supabase
+          .from("site_settings")
+          .select("theme")
+          .eq("id", "main")
+          .maybeSingle();
+        const t = (data?.theme ?? null) as ThemeConfig | null;
+        if (t && t.preset && THEME_PRESETS[t.preset]) {
+          cmsConfigRef.current = t;
+          // Only auto-apply if the user has not picked their own preset
+          if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+        }
+      } catch {
+        // site_settings table may not exist — silently use defaults
       }
     };
     loadCms();
 
-    const channel = supabase
-      .channel("site_settings_theme")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "site_settings", filter: "id=eq.main" },
-        (payload) => {
-          const t = (payload.new as any)?.theme as ThemeConfig | null;
-          if (t && t.preset && THEME_PRESETS[t.preset]) {
-            cmsConfigRef.current = t;
-            if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+    // Realtime subscription — wrapped in try/catch in case channel fails
+    let channel: any;
+    try {
+      channel = supabase
+        .channel("site_settings_theme")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "site_settings", filter: "id=eq.main" },
+          (payload) => {
+            const t = (payload.new as any)?.theme as ThemeConfig | null;
+            if (t && t.preset && THEME_PRESETS[t.preset]) {
+              cmsConfigRef.current = t;
+              if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    } catch {
+      // Realtime not available — theme still works from defaults
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch {}
+      }
     };
   }, []);
 

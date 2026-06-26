@@ -9,10 +9,19 @@
  * The EventDetail component receives the event as a prop and renders immediately.
  */
 import type { GetStaticPaths, GetStaticProps } from "next";
+import dynamic from "next/dynamic";
 import { getStaticEventRow, EVENT_ROWS } from "@/content/events";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import type { EventRow } from "@/types/events";
-import EventDetailPage from "@/pages/EventDetail";
+
+const EventDetailPage = dynamic(() => import("@/pages/EventDetail"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-screen bg-cream flex items-center justify-center">
+      <p className="font-display text-ink text-lg animate-pulse">Loading event...</p>
+    </div>
+  ),
+});
 
 interface Props {
   event: EventRow;
@@ -20,6 +29,7 @@ interface Props {
 }
 
 export default function EventSlugPage({ event, slug }: Props) {
+  // key is handled by _app.tsx via router.asPath — forces remount on navigation
   return <EventDetailPage event={event} slug={slug} />;
 }
 
