@@ -1,6 +1,6 @@
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,11 +14,33 @@ import "@/index.css";
 import "@/pages/ccd.css";
 import React from "react";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
-  },
-});
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 1,
+        staleTime: 30_000,
+        // Prevent refetching on window focus during initial load — reduces
+        // network waterfall and prevents "stuck" feeling from parallel fetches.
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+}
+
+// Browser: reuse a single client across navigations (created lazily).
+// Server: always create a new client per request to avoid data leaks.
+let browserQueryClient: QueryClient | undefined;
+
+function getQueryClient() {
+  if (typeof window === "undefined") {
+    // Server: always create a fresh client
+    return makeQueryClient();
+  }
+  // Browser: create once, reuse across navigations
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();
+  return browserQueryClient;
+}
 
 /**
  * Page transition loading bar — shows when Next.js is navigating between pages.
@@ -54,6 +76,7 @@ function PageTransition() {
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  const queryClient = getQueryClient();
 
   return (
     <QueryClientProvider client={queryClient}>
