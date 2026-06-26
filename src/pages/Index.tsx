@@ -1,9 +1,9 @@
 /**
- * Homepage — next event front & center, clean sections.
- * 
+ * Homepage — clean, non-repetitive layout.
+ *
  * Sections:
  *   Nav → Hero → Identity strip → About → Early Access →
- *   Next Event Poster → Events → CCDxSocial strip →
+ *   HomepageEvents (single unified section) →
  *   Videos → Playlist → Drops → Contact → Footer
  */
 import { lazy, Suspense, useEffect } from "react";
@@ -12,9 +12,7 @@ import Nav from "@/components/Nav";
 import Hero from "@/components/Hero";
 import MarqueeBySlot from "@/components/MarqueeBySlot";
 import About from "@/components/About";
-import NextEventHero from "@/components/NextEventHero";
-import Events from "@/components/Events";
-import CcdxSocialHomeStrip from "@/components/CcdxSocialHomeStrip";
+import HomepageEvents from "@/components/HomepageEvents";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
 import SectionReveal from "@/components/SectionReveal";
@@ -77,12 +75,8 @@ const Index = () => {
           <SectionReveal><EarlyAccess /></SectionReveal>
         </Suspense>
 
-        {/* ── Next Event — dynamic, auto-resolves from data ── */}
-        <SectionReveal><NextEventHero /></SectionReveal>
-
-        <MarqueeBySlot id="above-events" />
-        <SectionReveal><Events /></SectionReveal>
-        <SectionReveal><CcdxSocialHomeStrip /></SectionReveal>
+        {/* ── Events — one unified section, no repetition ── */}
+        <SectionReveal><HomepageEvents /></SectionReveal>
 
         <MarqueeBySlot id="above-videos" />
         <Suspense fallback={<SectionFallback bg="bg-ink" />}>
