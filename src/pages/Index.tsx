@@ -17,9 +17,9 @@ import Hero from "@/components/Hero";
 import SEO from "@/components/SEO";
 
 // Below-the-fold components — loaded after initial paint
-const MarqueeBySlot = dynamic(() => import("@/components/MarqueeBySlot"), { ssr: false });
+const MarqueeBySlot = dynamic(() => import("@/components/MarqueeBySlot"));
 const About = dynamic(() => import("@/components/About"));
-const HomepageEvents = dynamic(() => import("@/components/HomepageEvents"), { ssr: false });
+const HomepageEvents = dynamic(() => import("@/components/HomepageEvents"));
 const Contact = dynamic(() => import("@/components/Contact"));
 const Footer = dynamic(() => import("@/components/Footer"));
 import SectionReveal from "@/components/SectionReveal";
