@@ -2,7 +2,6 @@ import { Link } from "@/lib/compat-router";
 import { supabase } from "@/lib/supabase";
 import ccdLogo from "@/assets/ccd-logo.png";
 import { imgUrl } from "@/lib/img";
-import { getAllPosts } from "@/content/posts";
 import { useState } from "react";
 
 const groups = [
@@ -10,64 +9,17 @@ const groups = [
     title: "EXPLORE",
     links: [
       { to: "/", label: "Home" },
-      { to: "/about", label: "About" },
-      { to: "/discover", label: "Discover" },
       { to: "/events", label: "Events" },
+      { to: "/videos", label: "Videos" },
+      { to: "/playlists", label: "Playlists" },
       { to: "/shop", label: "Shop" },
     ],
   },
   {
-    title: "SCENES",
+    title: "CCD × SOCIAL",
     links: [
-      { to: "/scene/bengaluru", label: "Bengaluru" },
-      { to: "/scene/mumbai", label: "Mumbai" },
-      { to: "/scene/delhi", label: "Delhi" },
-      { to: "/scene/goa", label: "Goa" },
-      { to: "/scene/hyderabad", label: "Hyderabad" },
-      { to: "/scene/pune", label: "Pune" },
-    ],
-  },
-  {
-    title: "GENRES",
-    links: [
-      { to: "/genres/techno", label: "Techno" },
-      { to: "/genres/house", label: "House" },
-      { to: "/genres/jungle-dnb", label: "Jungle / D&B" },
-      { to: "/genres/uk-garage", label: "UK Garage" },
-      { to: "/genres/disco", label: "Disco" },
-      { to: "/genres/ambient", label: "Ambient" },
-    ],
-  },
-  {
-    title: "GLOBAL ORIGINS",
-    links: [
-      { to: "/scenes/detroit-techno", label: "Detroit Techno" },
-      { to: "/scenes/chicago-house", label: "Chicago House" },
-      { to: "/scenes/london-jungle", label: "London Jungle" },
-      { to: "/scenes/berlin-techno", label: "Berlin Techno" },
-      { to: "/scenes/goa-trance", label: "Goa Trance" },
-    ],
-  },
-  {
-    title: "WATCH & LISTEN",
-    links: [
-      { to: "/videos", label: "Videos" },
-      { to: "/playlists", label: "Playlists" },
-    ],
-  },
-  {
-    title: "READ",
-    links: [
-      { to: "/blog", label: "Blog" },
-      { to: "/press", label: "Press" },
-      { to: "/media", label: "Media" },
-      { to: "/pets", label: "Pets" },
-    ],
-  },
-  {
-    title: "PLAY",
-    links: [
-      { to: "/cat-studio", label: "Cat Studio ✦" },
+      { to: "/ccdxsocial", label: "The Series" },
+      { to: "/ccdxsocial/sponsor", label: "Sponsor" },
     ],
   },
   {
@@ -76,33 +28,9 @@ const groups = [
       { to: "/for-venues", label: "Venue Partners" },
       { to: "/for-artists", label: "For Artists" },
       { to: "/for-investors", label: "For Investors" },
-      { to: "/book", label: "Book an Artist" },
-      { to: "/promoters", label: "Promoters" },
-    ],
-  },
-  {
-    title: "LEGAL",
-    links: [
-      { to: "/privacy", label: "Privacy" },
-      { to: "/terms", label: "Terms" },
-      { to: "/cookies", label: "Cookies" },
     ],
   },
 ];
-
-const buildDiscover = () => {
-  const links: { to: string; label: string }[] = [
-    { to: "/blog", label: "The Journal" },
-    { to: "/bengaluru-underground-dance-music", label: "Bengaluru Scene Guide" },
-  ];
-  try {
-    const posts = getAllPosts();
-    const featured = posts.find((p) => p.category === "GUIDES") ?? posts[0];
-    if (featured) links.push({ to: `/blog/${featured.slug}`, label: featured.coverTitle || featured.title.slice(0, 32) });
-  } catch { /* noop */ }
-  links.push({ to: "/events", label: "Next Episode" });
-  return links;
-};
 
 
 const Footer = () => {
@@ -184,7 +112,7 @@ const Footer = () => {
           {state === "error" && <p className="text-magenta text-xs mt-1 font-display">Something went wrong — try again</p>}
         </div>
 
-        <div className="mt-20 grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-10 max-w-6xl mx-auto">
+        <div className="mt-20 grid sm:grid-cols-2 md:grid-cols-4 gap-10 max-w-4xl mx-auto">
           {groups.map((g) => (
             <div key={g.title}>
               <p className="font-display text-acid-yellow text-lg mb-3">{g.title}</p>
@@ -200,18 +128,6 @@ const Footer = () => {
             </div>
           ))}
           <div>
-            <p className="font-display text-acid-yellow text-lg mb-3">DISCOVER</p>
-            <ul className="space-y-2">
-              {buildDiscover().map((l) => (
-                <li key={l.to}>
-                  <Link to={l.to} className="font-medium text-cream/80 hover:text-acid-yellow transition-colors">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
             <p className="font-display text-acid-yellow text-lg mb-3">FOLLOW</p>
             <ul className="space-y-2">
               <li><a href="https://instagram.com/catscan.dance" target="_blank" rel="noopener noreferrer" className="font-medium text-cream/80 hover:text-acid-yellow transition-colors">Instagram</a></li>
@@ -226,15 +142,9 @@ const Footer = () => {
           BANGALORE
         </p>
         <p className="mt-2 text-cream/50 text-sm font-medium text-center">© {new Date().getFullYear()} Cats Can Dance — so can you.</p>
-        <nav aria-label="Legal" className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-cream/60">
-          <Link to="/privacy" className="hover:text-acid-yellow transition-colors">Privacy</Link>
-          <span aria-hidden="true">·</span>
-          <Link to="/terms" className="hover:text-acid-yellow transition-colors">Terms</Link>
-          <span aria-hidden="true">·</span>
-          <Link to="/cookies" className="hover:text-acid-yellow transition-colors">Cookies</Link>
-          <span aria-hidden="true">·</span>
-          <a href="mailto:hello@catscandance.com" className="hover:text-acid-yellow transition-colors">Contact</a>
-        </nav>
+        <p className="mt-3 text-center text-xs text-cream/40">
+          <a href="mailto:hello@catscandance.com" className="hover:text-acid-yellow transition-colors">hello@catscandance.com</a>
+        </p>
       </div>
     </section>
   );
