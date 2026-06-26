@@ -38,6 +38,7 @@ import SeriesStrip from "@/components/SeriesStrip";
 import StickyRsvpBar from "@/components/StickyRsvpBar";
 
 import { imgUrl } from "@/lib/img";
+import { supabase } from "@/lib/supabase";
 import {
   getEventContent,
   getStaticEventsBySeries,
@@ -47,6 +48,20 @@ import episode1Poster from "@/assets/episode-1-poster.png";
 import type { EventRow, MediaItem } from "@/types/events";
 
 // ──────────────────── helpers ────────────────────
+
+/** Resolve a poster_url (bare path, relative URL, or full URL) to a public URL. */
+function resolvePoster(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/")) return v;
+  try {
+    const { data } = supabase.storage.from("posters").getPublicUrl(v);
+    return data?.publicUrl ?? `/${v}`;
+  } catch {
+    return `/${v}`;
+  }
+}
 
 const Field = ({
   label,
@@ -264,9 +279,9 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
 
               {/* Poster */}
               <div className="lg:max-w-md w-full justify-self-end">
-                {event.poster_url ? (
+                {resolvePoster(event.poster_url) ? (
                   <img
-                    src={event.poster_url}
+                    src={resolvePoster(event.poster_url)!}
                     alt={`${event.title} poster`}
                     loading="eager"
                     className="w-full aspect-[3/4] object-cover border-4 border-ink chunk-shadow-lg"

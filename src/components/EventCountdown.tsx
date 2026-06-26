@@ -25,17 +25,19 @@ type Props = {
 const PAD = (n: number) => n.toString().padStart(2, "0");
 
 const EventCountdown = ({ date, doorsTime, invert = false }: Props) => {
-  const [now, setNow] = useState<number>(() => Date.now());
-  const [secondsTick, setSecondsTick] = useState<number>(0);
+  // Start at 0 so server-render and first client render match (no hydration mismatch).
+  // The real timestamp is set in useEffect, which only runs on the client.
+  const [now, setNow] = useState<number>(0);
 
   useEffect(() => {
-    const minute = setInterval(() => setNow(Date.now()), 60_000);
-    const second = setInterval(() => setSecondsTick((s) => s + 1), 1000);
-    return () => {
-      clearInterval(minute);
-      clearInterval(second);
-    };
+    // Tick every second so the seconds counter is actually live.
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Not yet hydrated on the client — render nothing to avoid a flash.
+  if (!now) return null;
 
   const target = parseEventDate(date);
   if (!target) return null;
@@ -43,11 +45,10 @@ const EventCountdown = ({ date, doorsTime, invert = false }: Props) => {
   const diff = target.getTime() - now;
   if (diff < 60_000) return null; // < 1 minute — hide; status pill takes over
 
-  const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const mins  = Math.floor((diff / (1000 * 60)) % 60);
-  // tick the seconds locally so reading it always feels live
-  const seconds = (60 - (Math.floor(now / 1000) % 60) - (secondsTick % 1)) % 60;
+  const days    = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours   = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const mins    = Math.floor((diff / (1000 * 60)) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
 
   const bg = invert ? "bg-acid-yellow text-ink" : "bg-ink text-cream";
   const accent = invert ? "text-magenta" : "text-acid-yellow";
