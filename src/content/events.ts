@@ -67,8 +67,8 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "India's first curated pet lifestyle festival meets underground dance music. The first chapter — outdoor pet zone from 4 PM with activities, vendor market, portrait booth, and lookalike contest. Then Startdawg b2b Merman take the floor at 9. The pack meets for the first time.",
-    lineup: ["Startdawg", "Merman", "TBA"],
+      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Sahntam carry it through to close. Free entry, RSVP only.",
+    lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Sahntam"],
     status: "upcoming",
     poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
     sort_order: 1,
@@ -174,55 +174,65 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     cta_label: "RSVP — IT'S FREE →",
 
     narrative:
-      "CCDXSOCIAL 01 is the first chapter. Wide open — first impression, big tent, easy yes. The afternoon belongs to the animals: portrait booth, lookalike contest, vendor market. Then the room flips at 8 and Startdawg b2b Merman take the floor. The pack meets for the first time.",
+      "CCDXSOCIAL 01 is the first chapter — wide open, easy yes, first impression. The afternoon is yours from 4 PM: outdoor floor, vendor market, dogs welcome. Music kicks off at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Sahntam closing it out.",
 
-    vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
+    vibe_pillars: [
+      { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Sahntam carrying the night through to close." },
+      { icon: "🪩", label: "FLOOR",  desc: "Outdoor floor at Indiranagar Social. Free entry, RSVP only. No dress code beyond showing up." },
+      { icon: "🐾", label: "DOGS",   desc: "Dog-friendly afternoon. Bring your pup — there's space and some ongoing fun for the four-legged." },
+    ],
 
-    doors_time: "4 PM (pet zone) · 8 PM (floor)",
-    peak_time:  "9 PM — late",
+    doors_time: "4 PM",
+    peak_time:  "9 PM — close",
 
     schedule: [
-      { time: "4:00 PM",  what: "Gates open · pet zone begins · vendor market opens" },
-      { time: "4:30 PM",  what: "Pet portrait booth · lookalike contest begins" },
-      { time: "6:00 PM",  what: "Lookalike contest results · crowd vote" },
-      { time: "7:30 PM",  what: "Pet zone wraps · portrait booth final calls" },
-      { time: "8:00 PM",  what: "Doors open for the night · room resets" },
-      { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
-      { time: "11:00 PM", what: "Special guest set (TBA)" },
-      { time: "1:00 AM",  what: "Last drinks · last dance" },
+      { time: "4:00 PM",  what: "Gates open · vendor market" },
+      { time: "4:30 PM",  what: "Open deck winners", highlight: true },
+      { time: "6:00 PM",  what: "Agent Bugs", highlight: true },
+      { time: "7:30 PM",  what: "Groovier", highlight: true },
+      { time: "9:00 PM",  what: "Sartdawg", highlight: true },
+      { time: "10:30 PM", what: "Sahntam — to close", highlight: true },
     ],
 
     artist_details: {
-      "Startdawg": {
-        name: "Startdawg",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "startdawg",
-        blurb: "Bangalore staple. House selector with a soft spot for disco edits and the long build.",
+      "Open Deck Winners": {
+        name: "Open Deck Winners",
+        role: "Open Decks",
+        set_time: "4:30 PM – 6:00 PM",
+        blurb: "Selected from the open deck submission. First up, setting the tone.",
       },
-      "Merman": {
-        name: "Merman",
-        role: "Resident",
-        set_time: "9 PM — 11 PM (b2b)",
-        slug: "merman",
-        blurb: "Garage, jungle, and the kind of low-end that fixes posture problems.",
+      "Agent Bugs": {
+        name: "Agent Bugs",
+        role: "DJ",
+        set_time: "6:00 PM – 7:30 PM",
+        blurb: "",
       },
-      "TBA": {
-        name: "TBA",
-        role: "Special Guest",
-        set_time: "11 PM — late",
-        tba: true,
-        blurb: "Announcement next week.",
+      "Groovier": {
+        name: "Groovier",
+        role: "DJ",
+        set_time: "7:30 PM – 9:00 PM",
+        blurb: "",
+      },
+      "Sartdawg": {
+        name: "Sartdawg",
+        role: "DJ",
+        set_time: "9:00 PM – 10:30 PM",
+        blurb: "",
+      },
+      "Sahntam": {
+        name: "Sahntam",
+        role: "DJ",
+        set_time: "10:30 PM – close",
+        blurb: "Closing the night.",
       },
     },
 
-    venue_address:    "Indiranagar Social, 1st Cross, Stage 2, Indiranagar, Bengaluru 560038",
+    venue_address:    "Indiranagar Social, 100 Feet Rd, Indiranagar, Bengaluru 560038",
     venue_map_url:    "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
     venue_geo:        { lat: 12.9707654, lng: 77.6476266 },
     venue_embed_url:  "https://www.google.com/maps?q=Indiranagar+Social+Bengaluru&output=embed",
     capacity:         250,
-    dress_code:       "Wear what dances. Pets in their best.",
-    house_rules:      "Vaccinated pets only · short leads · water bowls provided · no flash on the floor",
+    dress_code:       "Wear what dances.",
     price_text:       "FREE — RSVP only",
 
     partners: [
@@ -231,10 +241,10 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
 
     marquee_items: [
       "CCDXSOCIAL 01",
-      "PETS WELCOME",
       "29 JUN · INDIRANAGAR SOCIAL",
-      "9 PM SHARP",
-      "B2B ALL NIGHT",
+      "AGENT BUGS · GROOVIER · SARTDAWG · SAHNTAM",
+      "DOORS 4 PM",
+      "FREE ENTRY",
     ],
   },
 
