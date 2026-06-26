@@ -88,7 +88,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <DiscoProvider>
             <SmoothScroll>
               <ScrollToTop />
-              <Component {...pageProps} key={router.asPath} />
+              <Component {...pageProps} />
               <ThemeSwitcher />
             </SmoothScroll>
           </DiscoProvider>

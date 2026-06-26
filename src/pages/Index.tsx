@@ -22,7 +22,7 @@ const About = dynamic(() => import("@/components/About"));
 const HomepageEvents = dynamic(() => import("@/components/HomepageEvents"), { ssr: false });
 const Contact = dynamic(() => import("@/components/Contact"));
 const Footer = dynamic(() => import("@/components/Footer"));
-const SectionReveal = dynamic(() => import("@/components/SectionReveal"));
+import SectionReveal from "@/components/SectionReveal";
 const MoonwalkCat = dynamic(() => import("@/components/MoonwalkCat"), { ssr: false });
 
 const Playlist = lazy(() => import("@/components/Playlist"));
