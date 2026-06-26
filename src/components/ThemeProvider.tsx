@@ -23,21 +23,31 @@ const ThemeCtx = createContext<Ctx>({
 const LOCAL_KEY = "ccd_theme_preset";
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [config, setConfig] = useState<ThemeConfig>(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(LOCAL_KEY) : null;
-    return { preset: stored && THEME_PRESETS[stored] ? stored : DEFAULT_THEME.id };
-  });
-  const [hasLocalOverride, setHasLocalOverride] = useState<boolean>(() => {
-    return typeof window !== "undefined" && !!localStorage.getItem(LOCAL_KEY);
-  });
+  // Always start with the default preset on both server and client to avoid
+  // hydration mismatch. localStorage is read in useEffect (client-only).
+  const [config, setConfig] = useState<ThemeConfig>({ preset: DEFAULT_THEME.id });
+  const [hasLocalOverride, setHasLocalOverride] = useState(false);
   const cmsConfigRef = useRef<ThemeConfig | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Apply tokens whenever config changes
+  // On mount (client only): read localStorage and apply saved preset
   useEffect(() => {
-    applyTheme(config);
-  }, [config]);
+    setMounted(true);
+    const stored = localStorage.getItem(LOCAL_KEY);
+    if (stored && THEME_PRESETS[stored]) {
+      setConfig({ preset: stored });
+      setHasLocalOverride(true);
+    }
+  }, []);
 
-  // Fetch CMS theme on mount and subscribe to changes
+  // Apply tokens whenever config changes (client-only)
+  useEffect(() => {
+    if (mounted) {
+      applyTheme(config);
+    }
+  }, [config, mounted]);
+
+  // Fetch CMS theme on mount and subscribe to realtime changes
   useEffect(() => {
     const loadCms = async () => {
       const { data } = await supabase
@@ -48,7 +58,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       const t = (data?.theme ?? null) as ThemeConfig | null;
       if (t && t.preset && THEME_PRESETS[t.preset]) {
         cmsConfigRef.current = t;
-        // Only auto-apply if the user has not picked their own preset.
+        // Only auto-apply if the user has not picked their own preset
         if (!localStorage.getItem(LOCAL_KEY)) setConfig(t);
       }
     };

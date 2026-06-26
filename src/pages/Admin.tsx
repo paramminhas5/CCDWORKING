@@ -187,12 +187,6 @@ function NotAuthorized({ user }: { user: User }) {
 }
 
 
-// ── Helper: get auth token ────────────────────────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
-}
-
 // ── Add Event Form ────────────────────────────────────────────────────────────
 const EMPTY_EVENT_FORM = {
   slug: "",
@@ -234,46 +228,37 @@ function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
     e.preventDefault();
     setSubmitting(true);
 
-    const token = await getAuthToken();
-    if (!token) {
-      toast.error("Session expired — please sign in again");
-      setSubmitting(false);
-      return;
-    }
-
     const payload = {
-      ...form,
+      slug: form.slug.trim(),
+      title: form.title.trim(),
+      date: form.date.trim(),
+      city: form.city.trim(),
+      venue: form.venue.trim(),
+      blurb: form.blurb.trim() || "",
       lineup: form.lineup.split(",").map((s) => s.trim()).filter(Boolean),
-      poster_url: form.poster_url || null,
-      series: form.series || null,
-      series_label: form.series_label || null,
-      series_tagline: form.series_tagline || null,
+      status: form.status,
+      poster_url: form.poster_url.trim() || null,
+      sort_order: form.sort_order,
+      series: form.series.trim() || null,
+      series_label: form.series_label.trim() || null,
+      event_type: form.event_type || "standard",
+      pet_friendly: form.pet_friendly,
+      series_tagline: form.series_tagline.trim() || null,
+      is_finale: form.is_finale,
     };
 
-    try {
-      const res = await fetch("/api/events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+    const { error } = await supabase.from("events").insert(payload);
 
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Failed to create event");
-      } else {
-        toast.success(`Event "${form.title}" created!`);
-        setForm(EMPTY_EVENT_FORM);
-        setExpanded(false);
-        onSuccess();
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Network error");
-    } finally {
-      setSubmitting(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Event "${form.title}" created!`);
+      setForm(EMPTY_EVENT_FORM);
+      setExpanded(false);
+      onSuccess();
     }
+
+    setSubmitting(false);
   };
 
   if (!expanded) {
@@ -551,33 +536,17 @@ function EventsTab() {
   const deleteEvent = async (event: Event) => {
     setDeleteLoading(true);
 
-    const token = await getAuthToken();
-    if (!token) {
-      toast.error("Session expired — please sign in again");
-      setDeleteLoading(false);
-      setDeleting(null);
-      return;
+    const { error } = await supabase.from("events").delete().eq("id", event.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`"${event.title}" deleted`);
+      fetchEvents();
     }
 
-    try {
-      const res = await fetch(`/api/events?id=${event.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Failed to delete event");
-      } else {
-        toast.success(`"${event.title}" deleted`);
-        fetchEvents();
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Network error");
-    } finally {
-      setDeleteLoading(false);
-      setDeleting(null);
-    }
+    setDeleteLoading(false);
+    setDeleting(null);
   };
 
   if (loading) return <p className="p-4 text-ink/60">Loading events...</p>;
