@@ -187,10 +187,358 @@ function NotAuthorized({ user }: { user: User }) {
 }
 
 
+// ── Helper: get auth token ────────────────────────────────────────────────────
+async function getAuthToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+// ── Add Event Form ────────────────────────────────────────────────────────────
+const EMPTY_EVENT_FORM = {
+  slug: "",
+  title: "",
+  date: "",
+  city: "Bangalore",
+  venue: "",
+  blurb: "",
+  lineup: "",
+  status: "upcoming" as "upcoming" | "past",
+  poster_url: "",
+  sort_order: 99,
+  series: "",
+  series_label: "",
+  event_type: "standard",
+  pet_friendly: false,
+  series_tagline: "",
+  is_finale: false,
+};
+
+function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
+  const [form, setForm] = useState(EMPTY_EVENT_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const updateField = (field: string, value: string | number | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Auto-generate slug from title
+  const handleTitleChange = (title: string) => {
+    updateField("title", title);
+    if (!form.slug || form.slug === slugify(form.title)) {
+      updateField("slug", slugify(title));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    const token = await getAuthToken();
+    if (!token) {
+      toast.error("Session expired — please sign in again");
+      setSubmitting(false);
+      return;
+    }
+
+    const payload = {
+      ...form,
+      lineup: form.lineup.split(",").map((s) => s.trim()).filter(Boolean),
+      poster_url: form.poster_url || null,
+      series: form.series || null,
+      series_label: form.series_label || null,
+      series_tagline: form.series_tagline || null,
+    };
+
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create event");
+      } else {
+        toast.success(`Event "${form.title}" created!`);
+        setForm(EMPTY_EVENT_FORM);
+        setExpanded(false);
+        onSuccess();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="bg-acid-yellow text-ink font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+      >
+        + ADD EVENT
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-display text-xl text-ink">NEW EVENT</h3>
+        <button type="button" onClick={() => setExpanded(false)} className="font-display text-xs text-ink/50 hover:text-magenta">
+          CANCEL
+        </button>
+      </div>
+
+      {/* Row 1: Title + Slug */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">TITLE *</label>
+          <input
+            value={form.title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="CCDXSOCIAL 04"
+            required
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">SLUG *</label>
+          <input
+            value={form.slug}
+            onChange={(e) => updateField("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            placeholder="ccdxsocial-04"
+            required
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow font-mono"
+          />
+          <p className="text-[10px] text-ink/40 mt-0.5">URL: /events/{form.slug || "..."}</p>
+        </div>
+      </div>
+
+      {/* Row 2: Date + City + Venue */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">DATE *</label>
+          <input
+            value={form.date}
+            onChange={(e) => updateField("date", e.target.value)}
+            placeholder="Sun, Jun 29, 2026"
+            required
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">CITY *</label>
+          <input
+            value={form.city}
+            onChange={(e) => updateField("city", e.target.value)}
+            placeholder="Bangalore"
+            required
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">VENUE *</label>
+          <input
+            value={form.venue}
+            onChange={(e) => updateField("venue", e.target.value)}
+            placeholder="Indiranagar Social"
+            required
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+      </div>
+
+      {/* Row 3: Status + Sort Order */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">STATUS *</label>
+          <select
+            value={form.status}
+            onChange={(e) => updateField("status", e.target.value)}
+            className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream"
+          >
+            <option value="upcoming">Upcoming</option>
+            <option value="past">Past</option>
+          </select>
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">SORT ORDER</label>
+          <input
+            type="number"
+            value={form.sort_order}
+            onChange={(e) => updateField("sort_order", parseInt(e.target.value) || 0)}
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">EVENT TYPE</label>
+          <select
+            value={form.event_type}
+            onChange={(e) => updateField("event_type", e.target.value)}
+            className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream"
+          >
+            <option value="standard">Standard</option>
+            <option value="ccdxsocial">CCD x Social</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Row 4: Blurb */}
+      <div>
+        <label className="font-display text-xs text-ink mb-1 block">BLURB</label>
+        <textarea
+          value={form.blurb}
+          onChange={(e) => updateField("blurb", e.target.value)}
+          placeholder="Short description of the event..."
+          rows={3}
+          className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow resize-y"
+        />
+      </div>
+
+      {/* Row 5: Lineup + Poster URL */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">LINEUP (comma-separated)</label>
+          <input
+            value={form.lineup}
+            onChange={(e) => updateField("lineup", e.target.value)}
+            placeholder="Startdawg, Merman, TBA"
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">POSTER URL</label>
+          <input
+            value={form.poster_url}
+            onChange={(e) => updateField("poster_url", e.target.value)}
+            placeholder="https://..."
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+      </div>
+
+      {/* Row 6: Series fields */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">SERIES</label>
+          <input
+            value={form.series}
+            onChange={(e) => updateField("series", e.target.value)}
+            placeholder="ccdxsocial"
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">SERIES LABEL</label>
+          <input
+            value={form.series_label}
+            onChange={(e) => updateField("series_label", e.target.value)}
+            placeholder="CCD x SOCIAL"
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">SERIES TAGLINE</label>
+          <input
+            value={form.series_tagline}
+            onChange={(e) => updateField("series_tagline", e.target.value)}
+            placeholder="BROAD - WELCOMING - FIRST IMPRESSION"
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+      </div>
+
+      {/* Row 7: Checkboxes */}
+      <div className="flex gap-6">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.pet_friendly}
+            onChange={(e) => updateField("pet_friendly", e.target.checked)}
+            className="w-5 h-5 border-4 border-ink accent-magenta"
+          />
+          <span className="font-display text-xs text-ink">PET FRIENDLY</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.is_finale}
+            onChange={(e) => updateField("is_finale", e.target.checked)}
+            className="w-5 h-5 border-4 border-ink accent-magenta"
+          />
+          <span className="font-display text-xs text-ink">IS FINALE</span>
+        </label>
+      </div>
+
+      {/* Submit */}
+      <div className="pt-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="bg-magenta text-cream font-display text-sm px-8 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+        >
+          {submitting ? "CREATING..." : "CREATE EVENT →"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── Delete Confirmation Dialog ────────────────────────────────────────────────
+function DeleteConfirmDialog({
+  event,
+  onConfirm,
+  onCancel,
+}: {
+  event: Event;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm">
+      <div className="bg-cream border-4 border-ink chunk-shadow p-6 max-w-sm w-full mx-4">
+        <h3 className="font-display text-xl text-ink mb-2">DELETE EVENT?</h3>
+        <p className="text-sm text-ink/70 mb-1">
+          This will permanently remove:
+        </p>
+        <p className="font-display text-sm text-magenta mb-4">
+          &quot;{event.title}&quot; — {event.date}
+        </p>
+        <p className="text-xs text-ink/50 mb-6">
+          This action cannot be undone. RSVPs for this event will be orphaned.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-ink/10 text-ink font-display text-sm py-2 border-4 border-ink hover:bg-ink/20 transition-colors"
+          >
+            CANCEL
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 bg-magenta text-cream font-display text-sm py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+          >
+            DELETE
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Events Tab ────────────────────────────────────────────────────────────────
 function EventsTab() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<Event | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchEvents = useCallback(async () => {
     const { data } = await supabase.from("events").select("*").order("sort_order");
@@ -200,43 +548,115 @@ function EventsTab() {
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
-  const deleteEvent = async (id: string) => {
-    if (!confirm("Delete this event?")) return;
-    const { error } = await supabase.from("events").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Deleted");
-    fetchEvents();
+  const deleteEvent = async (event: Event) => {
+    setDeleteLoading(true);
+
+    const token = await getAuthToken();
+    if (!token) {
+      toast.error("Session expired — please sign in again");
+      setDeleteLoading(false);
+      setDeleting(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/events?id=${event.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to delete event");
+      } else {
+        toast.success(`"${event.title}" deleted`);
+        fetchEvents();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Network error");
+    } finally {
+      setDeleteLoading(false);
+      setDeleting(null);
+    }
   };
 
   if (loading) return <p className="p-4 text-ink/60">Loading events...</p>;
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
+      </div>
+
+      {/* Add Event Form */}
+      <AddEventForm onSuccess={fetchEvents} />
+
+      {/* Events Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b-4 border-ink text-left">
             <th className="font-display p-2">Title</th>
+            <th className="font-display p-2">Slug</th>
             <th className="font-display p-2">Date</th>
             <th className="font-display p-2">City</th>
             <th className="font-display p-2">Status</th>
+            <th className="font-display p-2">Order</th>
             <th className="font-display p-2"></th>
           </tr></thead>
           <tbody>
             {events.map((ev) => (
-              <tr key={ev.id ?? ev.slug} className="border-b border-ink/10">
+              <tr key={ev.id ?? ev.slug} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
                 <td className="p-2 font-medium">{ev.title}</td>
+                <td className="p-2 font-mono text-xs text-ink/60">{ev.slug}</td>
                 <td className="p-2">{ev.date}</td>
                 <td className="p-2">{ev.city}</td>
-                <td className="p-2"><span className={`px-2 py-0.5 text-xs font-bold border-2 border-ink ${ev.status === "upcoming" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>{ev.status}</span></td>
-                <td className="p-2"><button onClick={() => deleteEvent(ev.id!)} className="text-magenta font-display text-xs hover:underline">DELETE</button></td>
+                <td className="p-2">
+                  <span className={`px-2 py-0.5 text-xs font-bold border-2 border-ink ${ev.status === "upcoming" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>
+                    {ev.status}
+                  </span>
+                </td>
+                <td className="p-2 text-xs text-ink/60">{ev.sort_order}</td>
+                <td className="p-2">
+                  <button
+                    onClick={() => setDeleting(ev)}
+                    className="text-magenta font-display text-xs hover:underline"
+                  >
+                    DELETE
+                  </button>
+                </td>
               </tr>
             ))}
+            {events.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-ink/40 font-display">
+                  No events yet. Create your first one above.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleting && (
+        <DeleteConfirmDialog
+          event={deleting}
+          onConfirm={() => deleteEvent(deleting)}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
     </div>
   );
+}
+
+/** Convert a title to a URL-safe slug */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 
