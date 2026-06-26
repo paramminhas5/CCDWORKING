@@ -13,6 +13,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { uploadPoster } from "@/lib/upload";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { User } from "@supabase/supabase-js";
@@ -46,6 +47,19 @@ interface Video {
   title: string;
   thumbnail_url: string;
   sort_order: number;
+}
+
+interface ContactMessage {
+  id: string;
+  body: {
+    name?: string;
+    email?: string;
+    message?: string;
+    kind?: string;
+    reason?: string;
+    phone?: string;
+  };
+  created_at: string;
 }
 
 
@@ -387,7 +401,7 @@ function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
         />
       </div>
 
-      {/* Row 5: Lineup + Poster URL */}
+      {/* Row 5: Lineup + Poster Upload */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="font-display text-xs text-ink mb-1 block">LINEUP (comma-separated)</label>
@@ -399,12 +413,11 @@ function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
           />
         </div>
         <div>
-          <label className="font-display text-xs text-ink mb-1 block">POSTER URL</label>
-          <input
-            value={form.poster_url}
-            onChange={(e) => updateField("poster_url", e.target.value)}
-            placeholder="https://..."
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+          <label className="font-display text-xs text-ink mb-1 block">POSTER</label>
+          <PosterUpload
+            currentUrl={form.poster_url}
+            onUploaded={(url) => updateField("poster_url", url)}
+            folder={form.slug || "new"}
           />
         </div>
       </div>
@@ -524,6 +537,7 @@ function EventsTab() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<Event | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editing, setEditing] = useState<Event | null>(null);
 
   const fetchEvents = useCallback(async () => {
     const { data } = await supabase.from("events").select("*").order("sort_order");
@@ -585,7 +599,13 @@ function EventsTab() {
                   </span>
                 </td>
                 <td className="p-2 text-xs text-ink/60">{ev.sort_order}</td>
-                <td className="p-2">
+                <td className="p-2 flex gap-2">
+                  <button
+                    onClick={() => setEditing(ev)}
+                    className="text-ink font-display text-xs hover:underline"
+                  >
+                    EDIT
+                  </button>
                   <button
                     onClick={() => setDeleting(ev)}
                     className="text-magenta font-display text-xs hover:underline"
@@ -614,6 +634,15 @@ function EventsTab() {
           onCancel={() => setDeleting(null)}
         />
       )}
+
+      {/* Edit Event Dialog */}
+      {editing && (
+        <EditEventDialog
+          event={editing}
+          onSaved={fetchEvents}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
@@ -626,6 +655,376 @@ function slugify(text: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+
+// ── Poster Upload Component ───────────────────────────────────────────────────
+function PosterUpload({
+  currentUrl,
+  onUploaded,
+  folder,
+}: {
+  currentUrl: string;
+  onUploaded: (url: string) => void;
+  folder: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [mode, setMode] = useState<"file" | "url">(currentUrl ? "url" : "file");
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files allowed");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Max file size: 10MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const result = await uploadPoster(file, folder);
+      onUploaded(result.url);
+      toast.success("Poster uploaded!");
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setMode("file")}
+          className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${mode === "file" ? "bg-ink text-cream" : "bg-cream text-ink"}`}>
+          UPLOAD
+        </button>
+        <button type="button" onClick={() => setMode("url")}
+          className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${mode === "url" ? "bg-ink text-cream" : "bg-cream text-ink"}`}>
+          PASTE URL
+        </button>
+      </div>
+      {mode === "file" ? (
+        <label className="block cursor-pointer">
+          <div className={`border-4 border-dashed border-ink/30 px-3 py-3 text-center hover:border-ink/60 transition-colors ${uploading ? "opacity-50" : ""}`}>
+            {uploading ? (
+              <span className="font-display text-xs text-ink/60 animate-pulse">UPLOADING...</span>
+            ) : currentUrl ? (
+              <span className="font-display text-xs text-ink/60">✓ Uploaded — click to replace</span>
+            ) : (
+              <span className="font-display text-xs text-ink/40">Click to upload poster image</span>
+            )}
+          </div>
+          <input type="file" accept="image/*" onChange={handleFile} disabled={uploading} className="hidden" />
+        </label>
+      ) : (
+        <input
+          value={currentUrl}
+          onChange={(e) => onUploaded(e.target.value)}
+          placeholder="https://..."
+          className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
+        />
+      )}
+      {currentUrl && (
+        <div className="flex items-center gap-2">
+          <img src={currentUrl} alt="" className="h-10 w-10 object-cover border-2 border-ink" />
+          <span className="text-[10px] text-ink/40 truncate flex-1">{currentUrl}</span>
+          <button type="button" onClick={() => onUploaded("")} className="font-display text-[10px] text-magenta hover:underline">CLEAR</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ── Edit Event Dialog ─────────────────────────────────────────────────────────
+function EditEventDialog({
+  event,
+  onSaved,
+  onClose,
+}: {
+  event: Event;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    title: event.title,
+    date: event.date,
+    city: event.city,
+    venue: event.venue,
+    status: event.status,
+    poster_url: event.poster_url || "",
+    sort_order: event.sort_order,
+    blurb: (event as any).blurb || "",
+    lineup: Array.isArray((event as any).lineup) ? (event as any).lineup.join(", ") : "",
+    series: (event as any).series || "",
+    series_label: (event as any).series_label || "",
+    event_type: (event as any).event_type || "standard",
+    pet_friendly: (event as any).pet_friendly || false,
+    series_tagline: (event as any).series_tagline || "",
+    is_finale: (event as any).is_finale || false,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const updateField = (field: string, value: string | number | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+
+    const payload = {
+      title: form.title.trim(),
+      date: form.date.trim(),
+      city: form.city.trim(),
+      venue: form.venue.trim(),
+      status: form.status,
+      poster_url: form.poster_url.trim() || null,
+      sort_order: form.sort_order,
+      blurb: form.blurb.trim() || "",
+      lineup: form.lineup.split(",").map((s) => s.trim()).filter(Boolean),
+      series: form.series.trim() || null,
+      series_label: form.series_label.trim() || null,
+      event_type: form.event_type || "standard",
+      pet_friendly: form.pet_friendly,
+      series_tagline: form.series_tagline.trim() || null,
+      is_finale: form.is_finale,
+    };
+
+    const { error } = await supabase.from("events").update(payload).eq("id", event.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`"${form.title}" updated!`);
+      onSaved();
+      onClose();
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/60 backdrop-blur-sm overflow-y-auto py-8">
+      <form onSubmit={handleSave} className="bg-cream border-4 border-ink chunk-shadow p-6 max-w-2xl w-full mx-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl text-ink">EDIT: {event.title}</h3>
+          <button type="button" onClick={onClose} className="font-display text-xs text-ink/50 hover:text-magenta">✕ CLOSE</button>
+        </div>
+
+        {/* Title + Status */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="font-display text-xs text-ink mb-1 block">TITLE</label>
+            <input value={form.title} onChange={(e) => updateField("title", e.target.value)} required
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">STATUS</label>
+            <select value={form.status} onChange={(e) => updateField("status", e.target.value)}
+              className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream">
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Date + City + Venue */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">DATE</label>
+            <input value={form.date} onChange={(e) => updateField("date", e.target.value)} required
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">CITY</label>
+            <input value={form.city} onChange={(e) => updateField("city", e.target.value)} required
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">VENUE</label>
+            <input value={form.venue} onChange={(e) => updateField("venue", e.target.value)} required
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+        </div>
+
+        {/* Blurb */}
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">BLURB</label>
+          <textarea value={form.blurb} onChange={(e) => updateField("blurb", e.target.value)} rows={3}
+            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow resize-y" />
+        </div>
+
+        {/* Lineup + Sort */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="font-display text-xs text-ink mb-1 block">LINEUP (comma-separated)</label>
+            <input value={form.lineup} onChange={(e) => updateField("lineup", e.target.value)}
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">SORT ORDER</label>
+            <input type="number" value={form.sort_order} onChange={(e) => updateField("sort_order", parseInt(e.target.value) || 0)}
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+        </div>
+
+        {/* Poster Upload */}
+        <div>
+          <label className="font-display text-xs text-ink mb-1 block">POSTER</label>
+          <PosterUpload
+            currentUrl={form.poster_url}
+            onUploaded={(url) => updateField("poster_url", url)}
+            folder={event.slug}
+          />
+        </div>
+
+        {/* Series fields */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">SERIES</label>
+            <input value={form.series} onChange={(e) => updateField("series", e.target.value)}
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">SERIES LABEL</label>
+            <input value={form.series_label} onChange={(e) => updateField("series_label", e.target.value)}
+              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
+          </div>
+          <div>
+            <label className="font-display text-xs text-ink mb-1 block">EVENT TYPE</label>
+            <select value={form.event_type} onChange={(e) => updateField("event_type", e.target.value)}
+              className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream">
+              <option value="standard">Standard</option>
+              <option value="ccdxsocial">CCD x Social</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Checkboxes */}
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.pet_friendly} onChange={(e) => updateField("pet_friendly", e.target.checked)}
+              className="w-5 h-5 border-4 border-ink accent-magenta" />
+            <span className="font-display text-xs text-ink">PET FRIENDLY</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.is_finale} onChange={(e) => updateField("is_finale", e.target.checked)}
+              className="w-5 h-5 border-4 border-ink accent-magenta" />
+            <span className="font-display text-xs text-ink">IS FINALE</span>
+          </label>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-2">
+          <button type="submit" disabled={saving}
+            className="bg-magenta text-cream font-display text-sm px-8 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
+            {saving ? "SAVING..." : "SAVE CHANGES →"}
+          </button>
+          <button type="button" onClick={onClose}
+            className="bg-ink/10 text-ink font-display text-sm px-6 py-3 border-4 border-ink hover:bg-ink/20 transition-colors">
+            CANCEL
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+
+// ── Contacts Tab ──────────────────────────────────────────────────────────────
+function ContactsTab() {
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMessages = useCallback(async () => {
+    const { data } = await supabase.from("contact_messages").select("*").order("created_at", { ascending: false });
+    setMessages((data as ContactMessage[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchMessages(); }, [fetchMessages]);
+
+  const deleteMessage = async (id: string) => {
+    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Deleted");
+    fetchMessages();
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      "Name,Email,Kind,Reason,Message,Date",
+      ...messages.map((m) =>
+        `"${m.body?.name || ""}","${m.body?.email || ""}","${m.body?.kind || ""}","${m.body?.reason || ""}","${(m.body?.message || "").replace(/"/g, '""')}","${m.created_at}"`
+      ),
+    ].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  };
+
+  if (loading) return <p className="p-4 text-ink/60">Loading contacts...</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-display text-2xl text-ink">Contact Messages ({messages.length})</h2>
+        <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+          EXPORT CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b-4 border-ink text-left">
+              <th className="font-display p-2">Name</th>
+              <th className="font-display p-2">Email</th>
+              <th className="font-display p-2">Kind</th>
+              <th className="font-display p-2">Reason</th>
+              <th className="font-display p-2 max-w-[200px]">Message</th>
+              <th className="font-display p-2">Date</th>
+              <th className="font-display p-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {messages.map((m) => (
+              <tr key={m.id} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
+                <td className="p-2 font-medium">{m.body?.name || "—"}</td>
+                <td className="p-2 text-xs">{m.body?.email || "—"}</td>
+                <td className="p-2">
+                  <span className="px-2 py-0.5 text-[10px] font-bold border-2 border-ink bg-acid-yellow/30">
+                    {m.body?.kind || "general"}
+                  </span>
+                </td>
+                <td className="p-2 text-xs text-ink/70">{m.body?.reason || "—"}</td>
+                <td className="p-2 text-xs text-ink/60 max-w-[200px] truncate" title={m.body?.message}>
+                  {m.body?.message || "—"}
+                </td>
+                <td className="p-2 text-xs text-ink/50">{new Date(m.created_at).toLocaleDateString()}</td>
+                <td className="p-2">
+                  <button onClick={() => deleteMessage(m.id)} className="text-magenta font-display text-xs hover:underline">
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {messages.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-ink/40 font-display">
+                  No contact messages yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 
@@ -771,10 +1170,12 @@ export default function Admin() {
           <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
             <TabsTrigger value="events" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
             <TabsTrigger value="rsvps" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
+            <TabsTrigger value="contacts" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Contacts</TabsTrigger>
             <TabsTrigger value="videos" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
           </TabsList>
           <TabsContent value="events"><EventsTab /></TabsContent>
           <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
+          <TabsContent value="contacts"><ContactsTab /></TabsContent>
           <TabsContent value="videos"><VideosTab /></TabsContent>
         </Tabs>
       </div>
