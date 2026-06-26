@@ -19,7 +19,7 @@ const groups = [
     title: "CCD × SOCIAL",
     links: [
       { to: "/ccdxsocial", label: "The Series" },
-      { to: "/ccdxsocial/sponsor", label: "Sponsor" },
+      { to: "/ccdxsocial/sponsor", label: "Partner" },
     ],
   },
   {

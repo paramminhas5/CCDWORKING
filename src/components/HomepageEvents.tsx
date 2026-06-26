@@ -79,6 +79,15 @@ function resolvePoster(raw: string | null | undefined): string | null {
   }
 }
 
+// Map old Supabase titles to city display names — guards against stale DB data
+const SERIES_TITLE_MAP: Record<string, string> = {
+  "ccdxsocial 01": "BANGALORE",
+  "ccdxsocial 02": "BOMBAY",
+  "ccdxsocial 03": "HYDERABAD",
+  "mega":          "DELHI",
+};
+const seriesDisplayTitle = (t: string) => SERIES_TITLE_MAP[t.toLowerCase()] ?? t.toUpperCase();
+
 // ── Component ─────────────────────────────────────────────────────────────────
 const HomepageEvents = () => {
   const [events, setEvents] = useState<EventRow[]>(STATIC_ROWS);
@@ -325,7 +334,7 @@ const HomepageEvents = () => {
                           isCurrent ? "bg-acid-yellow" : isPast ? "bg-cream/30" : "bg-cream/50"
                         }`} />
                         <span className="font-display text-[10px] uppercase tracking-wider">
-                          {isFinale ? "★ " : ""}{e.title}
+                          {e.title === featured.slug ? "← NEXT" : ""}{seriesDisplayTitle(e.title)}
                         </span>
                         {isCurrent && (
                           <span className="font-display text-[9px] text-acid-yellow ml-1">← NEXT</span>
@@ -439,7 +448,7 @@ const HomepageEvents = () => {
             to="/ccdxsocial/sponsor"
             className="font-display text-acid-yellow text-xs border-2 border-acid-yellow/30 px-4 py-2 hover:border-acid-yellow hover:bg-acid-yellow/10 transition-colors"
           >
-            SPONSOR THE SERIES ✦
+            PARTNER WITH US ✦
           </Link>
         </div>
 

@@ -63,7 +63,7 @@ const Reveal = ({ children, delay = 0, className = "" }: { children: React.React
 
 
 // ── Artists ───────────────────────────────────────────────────────────────────
-const ARTISTS = ["SARTDAWG", "MERMAN", "DJAZZ", "HEDZ", "KAMARI", "VISHNU", "TANSANE", "+ MORE"];
+const ARTISTS = ["AGENT BUGS", "GROOVIER", "SARTDAWG", "SHANTAM", "TBC BOMBAY", "TBC HYDERABAD", "TBC DELHI", "+ MORE"];
 
 // ── Tour stops ────────────────────────────────────────────────────────────────
 const STOPS = [
@@ -111,7 +111,7 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "EventSeries",
   name: "CCD × SOCIAL",
-  description: "Cats Can Dance × Social — a four-city Sunday tour for pet parents and music lovers. Pet zone in the afternoon, underground dance music after dark.",
+  description: "Cats Can Dance × Social — four Sundays across four cities. Underground dance music, easy outdoor afternoons, pets welcome. Free entry, RSVP only.",
   url: "https://catscandance.com/ccdxsocial",
   organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
   subEvent: [
@@ -155,7 +155,7 @@ export default function CcdxSocialSeries() {
     <>
       <SEO
         title="CCD × SOCIAL — A 4-City Sunday Tour for Pets & Music"
-        description="Cats Can Dance × Social: Bangalore, Mumbai, Hyderabad, Delhi NCR. Outdoor pet zone in the afternoon, underground dance music after dark. Free entry, RSVP only."
+        description="Cats Can Dance × Social: Bangalore, Bombay, Hyderabad, Delhi. Four Sundays, four cities. Underground dance music, easy outdoor afternoons, pets welcome. Free entry, RSVP only."
         path="/ccdxsocial"
         jsonLd={jsonLd}
       />
