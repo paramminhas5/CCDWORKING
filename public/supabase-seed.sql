@@ -125,22 +125,22 @@ CREATE POLICY "Admin manages videos" ON site_videos FOR ALL USING (
 -- SEED DATA — CCD×SOCIAL Tour Events
 -- ══════════════════════════════════════════════════════════════════════════════
 INSERT INTO events (slug, title, date, city, venue, blurb, lineup, status, poster_url, sort_order, series, series_label, event_type, pet_friendly, series_tagline) VALUES
-('ccdxsocial-blr', 'CCDXSOCIAL 01', 'Sun, Jun 28, 2026', 'Bangalore', 'Social, Indiranagar',
+('ccdxsocial-01', 'CCDXSOCIAL 01', 'Sun, Jun 29, 2026', 'Bangalore', 'Social, Indiranagar',
  'India''s first curated pet lifestyle festival meets underground dance music. Outdoor pet zone from 4 PM. Dance floor opens at 8.',
  ARRAY['Startdawg', 'Merman', 'TBA'], 'upcoming',
  'https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg',
  1, 'ccdxsocial', 'CCD × SOCIAL', 'ccdxsocial', true, 'BROAD · WELCOMING · FIRST IMPRESSION'),
-('ccdxsocial-mum', 'CCDXSOCIAL 02', 'Sun, Jul 26, 2026', 'Mumbai', 'Antisocial, Khar',
+('ccdxsocial-02', 'CCDXSOCIAL 02', 'Sun, Jul 27, 2026', 'Mumbai', 'Antisocial, Khar',
  'Mumbai brings the looks. Best-dressed contest, live grooming demo, portrait studio.',
  ARRAY['Tansane', 'Merman', 'Taco'], 'upcoming',
  'https://catscandance.com/__l5e/assets-v1/c77b5b48-b34f-4add-a877-c1fd3caad34f/ccdxsocial-mum-poster.jpg',
  2, 'ccdxsocial', 'CCD × SOCIAL', 'ccdxsocial', true, 'STYLE · FASHION · MIDSUMMER ENERGY'),
-('ccdxsocial-hyd', 'CCDXSOCIAL 03', 'Sun, Aug 30, 2026', 'Hyderabad', 'Social Mindspace',
+('ccdxsocial-03', 'CCDXSOCIAL 03', 'Sun, Aug 30, 2026', 'Hyderabad', 'Social Mindspace',
  'Two agility courses, timed speed runs, performance contest.',
  ARRAY['TBA'], 'upcoming',
  'https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-a548-c2148faf8a02/ccdxsocial-hyd-poster.jpg',
  3, 'ccdxsocial', 'CCD × SOCIAL', 'ccdxsocial', true, 'AGILITY · PERFORMANCE · PRE-FINALE'),
-('ccdxsocial-delhi', 'CCDXSOCIAL MEGA', 'October 2026', 'Delhi / NCR', 'Venue TBA — large format',
+('ccdxsocial-mega', 'MEGA', 'October 2026', 'Delhi / NCR', 'Venue TBA — large format',
  'The grand finale. Outdoor stage, pet runway, agility finals, full lineup.',
  ARRAY['TBA'], 'upcoming', NULL,
  4, 'ccdxsocial', 'CCD × SOCIAL', 'ccdxsocial', true, 'GRAND FINALE · SEASON CLOSER')
