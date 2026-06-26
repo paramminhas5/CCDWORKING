@@ -28,24 +28,29 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [config, setConfig] = useState<ThemeConfig>({ preset: DEFAULT_THEME.id });
   const [hasLocalOverride, setHasLocalOverride] = useState(false);
   const cmsConfigRef = useRef<ThemeConfig | null>(null);
-  const [mounted, setMounted] = useState(false);
+  // Track whether the initial localStorage read has been applied so the
+  // config-change effect doesn't fire a redundant applyTheme on first mount.
+  const skipFirstApply = useRef(true);
 
-  // On mount (client only): read localStorage and apply saved preset
+  // On mount: read localStorage and apply the correct theme immediately —
+  // single call, no flash from default → stored.
   useEffect(() => {
-    setMounted(true);
     const stored = localStorage.getItem(LOCAL_KEY);
     if (stored && THEME_PRESETS[stored]) {
       setConfig({ preset: stored });
       setHasLocalOverride(true);
+      applyTheme({ preset: stored });
+    } else {
+      applyTheme({ preset: DEFAULT_THEME.id });
     }
+    skipFirstApply.current = false;
   }, []);
 
-  // Apply tokens whenever config changes (client-only)
+  // Apply theme on every subsequent config change (ThemeSwitcher, Shift+T, CMS)
   useEffect(() => {
-    if (mounted) {
-      applyTheme(config);
-    }
-  }, [config, mounted]);
+    if (skipFirstApply.current) return;
+    applyTheme(config);
+  }, [config]);
 
   // Fetch CMS theme on mount and subscribe to realtime changes
   useEffect(() => {

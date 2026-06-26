@@ -181,9 +181,8 @@ const Hero = () => {
             >
               <span className="inline-block w-2 h-2 bg-magenta rounded-full animate-pulse shrink-0" aria-hidden />
               <span>
-                ▶ {next.title} — {daysAway === 1 ? "TOMORROW" : `${daysAway} DAYS`}
+                ▶ {next.title} — {next.venue}
               </span>
-              <span className="hidden sm:inline text-ink/60">· {next.venue}</span>
               <span className="bg-ink text-acid-yellow px-2 py-0.5 text-[10px] font-display uppercase">RSVP →</span>
             </Link>
           </div>

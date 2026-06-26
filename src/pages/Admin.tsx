@@ -929,7 +929,208 @@ function EditEventDialog({
 }
 
 
-// ── Contacts Tab ──────────────────────────────────────────────────────────────
+// ── Playlists Tab ─────────────────────────────────────────────────────────────
+interface PlaylistRow {
+  id: string;
+  title: string;
+  platform: "spotify" | "youtube" | "soundcloud";
+  embed_id: string;
+  url: string;
+  sort_order: number;
+  featured: boolean;
+  created_at?: string;
+}
+
+const PLATFORM_COLOURS: Record<string, string> = {
+  spotify: "bg-lime text-ink",
+  youtube: "bg-magenta text-cream",
+  soundcloud: "bg-electric-blue text-cream",
+};
+
+const blankPlaylist = (): Omit<PlaylistRow, "id" | "created_at"> => ({
+  title: "", platform: "spotify", embed_id: "", url: "", sort_order: 0, featured: false,
+});
+
+function PlaylistsTab() {
+  const [items, setItems] = useState<PlaylistRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(blankPlaylist());
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<PlaylistRow>>({});
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("playlists").select("*").order("sort_order", { ascending: true });
+    setItems((data as PlaylistRow[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!form.title.trim() || !form.embed_id.trim()) { toast.error("Title and embed ID are required"); return; }
+    setSaving(true);
+    const { error } = await supabase.from("playlists").insert([form]);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Playlist added");
+    setForm(blankPlaylist());
+    setAdding(false);
+    load();
+  };
+
+  const save = async (id: string) => {
+    setSaving(true);
+    const { error } = await supabase.from("playlists").update(editForm).eq("id", id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved");
+    setEditId(null);
+    load();
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm("Delete this playlist?")) return;
+    const { error } = await supabase.from("playlists").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Deleted");
+    load();
+  };
+
+  const toggleFeatured = async (item: PlaylistRow) => {
+    await supabase.from("playlists").update({ featured: !item.featured }).eq("id", item.id);
+    load();
+  };
+
+  const Field = ({ label, value, onChange, type = "text", placeholder = "" }: {
+    label: string; value: string | number; onChange: (v: string) => void;
+    type?: string; placeholder?: string;
+  }) => (
+    <div className="flex flex-col gap-1">
+      <label className="font-display text-[10px] uppercase tracking-widest text-ink/60">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="border-2 border-ink px-2 py-1.5 font-medium text-sm bg-cream focus:outline-none focus:border-magenta" />
+    </div>
+  );
+
+  const PlatformSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <div className="flex flex-col gap-1">
+      <label className="font-display text-[10px] uppercase tracking-widest text-ink/60">Platform</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="border-2 border-ink px-2 py-1.5 font-medium text-sm bg-cream focus:outline-none">
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube</option>
+        <option value="soundcloud">SoundCloud</option>
+      </select>
+    </div>
+  );
+
+  if (loading) return <p className="p-4 text-ink/60 font-display animate-pulse">Loading playlists...</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-display text-2xl text-ink">Playlists ({items.length})</h2>
+        <button onClick={() => setAdding((v) => !v)}
+          className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+          {adding ? "CANCEL" : "+ ADD PLAYLIST"}
+        </button>
+      </div>
+
+      <p className="text-ink/60 text-sm font-medium">
+        Embed ID is the playlist ID from the URL — e.g. for Spotify{" "}
+        <code className="bg-ink/10 px-1">open.spotify.com/playlist/<strong>1cEE860l...</strong></code>
+      </p>
+
+      {/* ── Add form ── */}
+      {adding && (
+        <div className="bg-cream border-4 border-ink chunk-shadow p-5 space-y-3">
+          <p className="font-display text-ink text-lg">NEW PLAYLIST</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Title" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="Now Spinning" />
+            <PlatformSelect value={form.platform} onChange={(v) => setForm((f) => ({ ...f, platform: v as any }))} />
+            <Field label="Embed ID" value={form.embed_id} onChange={(v) => setForm((f) => ({ ...f, embed_id: v }))} placeholder="1cEE860l9GiBvIYVM2BbSS" />
+            <Field label="Full URL (optional)" value={form.url} onChange={(v) => setForm((f) => ({ ...f, url: v }))} placeholder="https://open.spotify.com/playlist/..." />
+            <Field label="Sort order" value={form.sort_order} type="number" onChange={(v) => setForm((f) => ({ ...f, sort_order: Number(v) }))} />
+            <div className="flex items-center gap-3 self-end pb-2">
+              <input type="checkbox" id="add-featured" checked={form.featured}
+                onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))} className="w-4 h-4 accent-magenta" />
+              <label htmlFor="add-featured" className="font-display text-sm text-ink">Featured (shown first on homepage)</label>
+            </div>
+          </div>
+          <button onClick={add} disabled={saving}
+            className="bg-magenta text-cream font-display text-sm px-5 py-2 border-4 border-ink chunk-shadow disabled:opacity-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+            {saving ? "SAVING..." : "ADD PLAYLIST →"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Playlist list ── */}
+      {items.length === 0 ? (
+        <div className="py-12 text-center border-4 border-dashed border-ink/20">
+          <p className="font-display text-ink/40 text-xl">No playlists yet.</p>
+          <p className="text-ink/40 text-sm mt-2">Add your first playlist above.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => {
+            const isEditing = editId === item.id;
+            return (
+              <div key={item.id} className="bg-cream border-4 border-ink chunk-shadow overflow-hidden">
+                {/* ── Row header ── */}
+                <div className="flex items-center gap-3 p-4">
+                  <span className={`font-display text-xs px-2 py-1 border-2 border-ink shrink-0 ${PLATFORM_COLOURS[item.platform]}`}>
+                    {item.platform.toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-lg truncate">{item.title}</p>
+                    <p className="text-ink/50 text-xs font-mono truncate">{item.embed_id}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <button onClick={() => toggleFeatured(item)}
+                      className={`font-display text-xs px-2 py-1 border-2 border-ink transition-colors ${item.featured ? "bg-acid-yellow text-ink" : "bg-cream text-ink/50 hover:bg-acid-yellow/50"}`}
+                      title={item.featured ? "Remove featured" : "Set as featured"}>
+                      ★ {item.featured ? "FEATURED" : "FEATURE"}
+                    </button>
+                    <button onClick={() => { setEditId(isEditing ? null : item.id); setEditForm({ ...item }); }}
+                      className="font-display text-xs px-2 py-1 border-2 border-ink hover:bg-acid-yellow transition-colors">
+                      {isEditing ? "CANCEL" : "EDIT"}
+                    </button>
+                    <button onClick={() => remove(item.id)}
+                      className="font-display text-xs px-2 py-1 border-2 border-magenta text-magenta hover:bg-magenta hover:text-cream transition-colors">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Inline edit form ── */}
+                {isEditing && (
+                  <div className="border-t-4 border-ink p-4 bg-cream/60 space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Field label="Title" value={editForm.title ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, title: v }))} />
+                      <PlatformSelect value={editForm.platform ?? "spotify"} onChange={(v) => setEditForm((f) => ({ ...f, platform: v as any }))} />
+                      <Field label="Embed ID" value={editForm.embed_id ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, embed_id: v }))} />
+                      <Field label="Full URL" value={editForm.url ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, url: v }))} />
+                      <Field label="Sort order" value={editForm.sort_order ?? 0} type="number" onChange={(v) => setEditForm((f) => ({ ...f, sort_order: Number(v) }))} />
+                    </div>
+                    <button onClick={() => save(item.id)} disabled={saving}
+                      className="bg-ink text-cream font-display text-sm px-5 py-2 border-4 border-ink disabled:opacity-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+                      {saving ? "SAVING..." : "SAVE CHANGES →"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
 function ContactsTab() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1223,15 +1424,17 @@ export default function Admin() {
       <div className="container py-8">
         <Tabs defaultValue="events" className="w-full">
           <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
-            <TabsTrigger value="events" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
-            <TabsTrigger value="rsvps" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
+            <TabsTrigger value="events"       className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
+            <TabsTrigger value="rsvps"        className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
             <TabsTrigger value="early_access" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Early Access</TabsTrigger>
-            <TabsTrigger value="contacts" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Contacts</TabsTrigger>
-            <TabsTrigger value="videos" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
+            <TabsTrigger value="playlists"    className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Playlists</TabsTrigger>
+            <TabsTrigger value="contacts"     className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Contacts</TabsTrigger>
+            <TabsTrigger value="videos"       className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
           </TabsList>
           <TabsContent value="events"><EventsTab /></TabsContent>
           <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
           <TabsContent value="early_access"><EarlyAccessTab /></TabsContent>
+          <TabsContent value="playlists"><PlaylistsTab /></TabsContent>
           <TabsContent value="contacts"><ContactsTab /></TabsContent>
           <TabsContent value="videos"><VideosTab /></TabsContent>
         </Tabs>
