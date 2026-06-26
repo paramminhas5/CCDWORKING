@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /embed/
-Disallow: /ccdxsocial
+Disallow: /ccdxsocial/proposal
 
 # AI / LLM crawlers — explicitly allowed
 User-agent: GPTBot
@@ -33,5 +33,3 @@ User-agent: CCBot
 Allow: /
 
 Sitemap: https://catscandance.com/sitemap.xml
-Sitemap: https://catscandance.com/sitemap-images.xml
-Sitemap: https://catscandance.com/sitemap-index.xml

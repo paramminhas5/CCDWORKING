@@ -30,8 +30,8 @@ export default function Document() {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
         {/* IndieWeb identity */}
-        <link rel="me" href="https://instagram.com/catscandance" />
-        <link rel="me" href="https://www.youtube.com/@catscandance" />
+        <link rel="me" href="https://instagram.com/catscan.dance" />
+        <link rel="me" href="https://www.youtube.com/@thesecatscandance" />
 
         {/* Geo */}
         <meta name="geo.region" content="IN-KA" />
@@ -105,9 +105,8 @@ export default function Document() {
                 { "@type": "Country", "name": "India" }
               ],
               "sameAs": [
-                "https://instagram.com/catscandance",
-                "https://www.tiktok.com/@catscandance",
-                "https://www.youtube.com/@catscandance"
+                "https://instagram.com/catscan.dance",
+                "https://www.youtube.com/@thesecatscandance"
               ],
               "contactPoint": {
                 "@type": "ContactPoint",
@@ -127,11 +126,6 @@ export default function Document() {
               "name": "Cats Can Dance",
               "url": "https://catscandance.com",
               "inLanguage": "en-IN",
-              "potentialAction": {
-                "@type": "SearchAction",
-                "target": "https://catscandance.com/?q={search_term_string}",
-                "query-input": "required name=search_term_string"
-              }
             }),
           }}
         />

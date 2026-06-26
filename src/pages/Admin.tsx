@@ -51,14 +51,9 @@ interface Video {
 
 interface ContactMessage {
   id: string;
-  body: {
-    name?: string;
-    email?: string;
-    message?: string;
-    kind?: string;
-    reason?: string;
-    phone?: string;
-  };
+  name?: string;
+  email?: string;
+  message?: string;
   created_at: string;
 }
 
@@ -956,9 +951,9 @@ function ContactsTab() {
 
   const exportCsv = () => {
     const rows = [
-      "Name,Email,Kind,Reason,Message,Date",
+      "Name,Email,Message,Date",
       ...messages.map((m) =>
-        `"${m.body?.name || ""}","${m.body?.email || ""}","${m.body?.kind || ""}","${m.body?.reason || ""}","${(m.body?.message || "").replace(/"/g, '""')}","${m.created_at}"`
+        `"${m.name || ""}","${m.email || ""}","${(m.message || "").replace(/"/g, '""')}","${m.created_at}"`
       ),
     ].join("\n");
     const blob = new Blob([rows], { type: "text/csv" });
@@ -984,9 +979,7 @@ function ContactsTab() {
             <tr className="border-b-4 border-ink text-left">
               <th className="font-display p-2">Name</th>
               <th className="font-display p-2">Email</th>
-              <th className="font-display p-2">Kind</th>
-              <th className="font-display p-2">Reason</th>
-              <th className="font-display p-2 max-w-[200px]">Message</th>
+              <th className="font-display p-2 max-w-[300px]">Message</th>
               <th className="font-display p-2">Date</th>
               <th className="font-display p-2"></th>
             </tr>
@@ -994,30 +987,92 @@ function ContactsTab() {
           <tbody>
             {messages.map((m) => (
               <tr key={m.id} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
-                <td className="p-2 font-medium">{m.body?.name || "—"}</td>
-                <td className="p-2 text-xs">{m.body?.email || "—"}</td>
-                <td className="p-2">
-                  <span className="px-2 py-0.5 text-[10px] font-bold border-2 border-ink bg-acid-yellow/30">
-                    {m.body?.kind || "general"}
-                  </span>
-                </td>
-                <td className="p-2 text-xs text-ink/70">{m.body?.reason || "—"}</td>
-                <td className="p-2 text-xs text-ink/60 max-w-[200px] truncate" title={m.body?.message}>
-                  {m.body?.message || "—"}
+                <td className="p-2 font-medium">{m.name || "—"}</td>
+                <td className="p-2 text-xs">{m.email || "—"}</td>
+                <td className="p-2 text-xs text-ink/60 max-w-[300px] truncate" title={m.message}>
+                  {m.message || "—"}
                 </td>
                 <td className="p-2 text-xs text-ink/50">{new Date(m.created_at).toLocaleDateString()}</td>
                 <td className="p-2">
-                  <button onClick={() => deleteMessage(m.id)} className="text-magenta font-display text-xs hover:underline">
-                    ✕
-                  </button>
+                  <button onClick={() => deleteMessage(m.id)} className="text-magenta font-display text-xs hover:underline">✕</button>
                 </td>
               </tr>
             ))}
             {messages.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-ink/40 font-display">
-                  No contact messages yet.
-                </td>
+                <td colSpan={5} className="p-8 text-center text-ink/40 font-display">No contact messages yet.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Early Access Tab ───────────────────────────────────────────────────────────
+interface EarlyAccessSignup {
+  id: string;
+  email: string;
+  source?: string;
+  created_at: string;
+}
+
+function EarlyAccessTab() {
+  const [signups, setSignups] = useState<EarlyAccessSignup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSignups = useCallback(async () => {
+    const { data } = await supabase.from("early_access_signups").select("*").order("created_at", { ascending: false });
+    setSignups((data as EarlyAccessSignup[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchSignups(); }, [fetchSignups]);
+
+  const exportCsv = () => {
+    const rows = [
+      "Email,Source,Date",
+      ...signups.map((s) => `"${s.email}","${s.source || ""}","${s.created_at}"`),
+    ].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `early-access-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  };
+
+  if (loading) return <p className="p-4 text-ink/60">Loading sign-ups...</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-display text-2xl text-ink">Early Access Sign-ups ({signups.length})</h2>
+        <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+          EXPORT CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b-4 border-ink text-left">
+              <th className="font-display p-2">Email</th>
+              <th className="font-display p-2">Source</th>
+              <th className="font-display p-2">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {signups.map((s) => (
+              <tr key={s.id} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
+                <td className="p-2 font-medium">{s.email}</td>
+                <td className="p-2 text-xs text-ink/60">{s.source || "—"}</td>
+                <td className="p-2 text-xs text-ink/50">{new Date(s.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))}
+            {signups.length === 0 && (
+              <tr>
+                <td colSpan={3} className="p-8 text-center text-ink/40 font-display">No early access sign-ups yet.</td>
               </tr>
             )}
           </tbody>
@@ -1170,11 +1225,13 @@ export default function Admin() {
           <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
             <TabsTrigger value="events" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
             <TabsTrigger value="rsvps" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
+            <TabsTrigger value="early_access" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Early Access</TabsTrigger>
             <TabsTrigger value="contacts" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Contacts</TabsTrigger>
             <TabsTrigger value="videos" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
           </TabsList>
           <TabsContent value="events"><EventsTab /></TabsContent>
           <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
+          <TabsContent value="early_access"><EarlyAccessTab /></TabsContent>
           <TabsContent value="contacts"><ContactsTab /></TabsContent>
           <TabsContent value="videos"><VideosTab /></TabsContent>
         </Tabs>

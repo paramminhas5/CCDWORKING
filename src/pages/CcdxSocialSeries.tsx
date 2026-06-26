@@ -71,7 +71,7 @@ const STOPS = [
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
     date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
     desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
-    lineup: "Agent Bugs · Groovier · Sartdawg · Sahntam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
+    lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
   },
   {
