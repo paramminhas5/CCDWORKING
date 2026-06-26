@@ -42,7 +42,7 @@ function resolvePoster(raw: string | null | undefined): string | null {
   if (!v) return null;
   if (v.startsWith("http") || v.startsWith("/")) return v;
   try {
-    const { data } = supabase.storage.from("event-posters").getPublicUrl(v);
+    const { data } = supabase.storage.from("posters").getPublicUrl(v);
     return data?.publicUrl ?? `/${v}`;
   } catch {
     return `/${v}`;
