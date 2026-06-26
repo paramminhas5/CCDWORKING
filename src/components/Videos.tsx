@@ -30,6 +30,7 @@ const Videos = () => {
           id: v.youtube_id,
           title: v.title,
           thumbnail: v.thumbnail_url ?? `https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg`,
+          publishedAt: v.created_at ?? new Date().toISOString(),
         })));
       } catch {
         if (!cancelled) setError(true);

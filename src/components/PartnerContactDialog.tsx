@@ -149,7 +149,7 @@ const PartnerContactDialog = ({ kind, trigger, defaultReason, defaultMessage, op
           website,
         },
       });
-      if (error || (data as any)?.error) throw new Error("send failed");
+      if (error) throw new Error("send failed");
       toast.success("Sent! We'll be in touch soon.");
       setSent(true);
       setForm({ name: "", email: "", phone: "", reason: cfg.reasons[0], message: "" });

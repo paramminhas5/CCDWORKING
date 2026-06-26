@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,17 +14,13 @@ import { useCartStore } from "@/stores/cartStore";
 
 export const CartDrawer = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { items, isLoading, isSyncing, updateQuantity, removeItem, getCheckoutUrl, syncCart } =
-    useCartStore();
-  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce((s, i) => s + parseFloat(i.price.amount) * i.quantity, 0);
-  const currency = items[0]?.price.currencyCode || "INR";
-  const checkoutUrl = getCheckoutUrl();
-  const canCheckout = items.length > 0 && !!checkoutUrl && !isLoading && !isSyncing;
+  const { items, syncing, updateQuantity, removeItem, getCheckoutUrl } = useCartStore();
 
-  useEffect(() => {
-    if (isOpen) syncCart();
-  }, [isOpen, syncCart]);
+  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
+  const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const currency = items[0]?.currency || "INR";
+  const checkoutUrl = getCheckoutUrl();
+  const canCheckout = items.length > 0 && !!checkoutUrl && !syncing;
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -65,21 +61,20 @@ export const CartDrawer = () => {
                   {items.map((item) => (
                     <div key={item.variantId} className="flex gap-4 p-2 border-2 border-ink bg-cream">
                       <div className="w-16 h-16 bg-secondary/20 overflow-hidden flex-shrink-0 border-2 border-ink">
-                        {item.product.node.images?.edges?.[0]?.node && (
+                        {item.image && (
                           <img
-                            src={item.product.node.images.edges[0].node.url}
-                            alt={item.product.node.title}
+                            src={item.image}
+                            alt={item.title}
                             className="w-full h-full object-cover"
                           />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold truncate">{item.product.node.title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {item.selectedOptions.map((o) => o.value).join(" • ")}
-                        </p>
+                        <h4 className="font-bold truncate">{item.title}</h4>
+                        <p className="text-sm text-muted-foreground">{item.variantTitle}</p>
                         <p className="font-display">
-                          {item.price.currencyCode} {parseFloat(item.price.amount).toFixed(2)}
+                          {item.currency === "INR" ? "₹" : item.currency}{" "}
+                          {item.price.toLocaleString("en-IN")}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -119,7 +114,7 @@ export const CartDrawer = () => {
                 <div className="flex justify-between items-center">
                   <span className="font-display text-2xl">TOTAL</span>
                   <span className="font-display text-2xl">
-                    {currency} {totalPrice.toFixed(2)}
+                    {currency === "INR" ? "₹" : currency} {totalPrice.toLocaleString("en-IN")}
                   </span>
                 </div>
                 {canCheckout ? (
@@ -139,7 +134,7 @@ export const CartDrawer = () => {
                     disabled
                     className="w-full inline-flex items-center justify-center gap-2 bg-magenta/60 text-cream border-4 border-ink font-display text-lg py-3 px-4 cursor-not-allowed"
                   >
-                    {isLoading || isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Checkout"}
+                    {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Checkout"}
                   </button>
                 )}
               </div>

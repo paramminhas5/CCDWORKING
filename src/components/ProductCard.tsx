@@ -11,9 +11,11 @@ type Props = {
 
 const ProductCard = ({ product, altSuffix = "Cats Can Dance limited drop" }: Props) => {
   const addItem = useCartStore((s) => s.addItem);
-  const isLoading = useCartStore((s) => s.isLoading);
+  const syncing = useCartStore((s) => s.syncing);
   const variant = product.node.variants.edges[0]?.node;
   const img = product.node.images.edges[0]?.node;
+  const priceAmount = parseFloat(variant?.price?.amount ?? "0");
+  const currencyCode = variant?.price?.currencyCode ?? "INR";
 
   return (
     <article className="border-4 border-ink chunk-shadow bg-cream overflow-hidden hover:-translate-y-1 transition-transform">
@@ -36,28 +38,28 @@ const ProductCard = ({ product, altSuffix = "Cats Can Dance limited drop" }: Pro
             {product.node.title}
           </h3>
         </Link>
-        {/* Price — always visible in grid */}
         <p className="font-display text-xl text-ink mb-1">
-          {product.node.priceRange.minVariantPrice.currencyCode === "INR" ? "₹" : product.node.priceRange.minVariantPrice.currencyCode}{" "}
-          {parseFloat(product.node.priceRange.minVariantPrice.amount).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          {currencyCode === "INR" ? "₹" : currencyCode}{" "}
+          {priceAmount.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </p>
         <p className="text-ink/50 text-xs font-medium mb-4 uppercase tracking-widest">Limited drop · No restocks</p>
         <Button
           onClick={() =>
             variant &&
             addItem({
-              product,
               variantId: variant.id,
+              productId: product.node.id,
+              title: product.node.title,
               variantTitle: variant.title,
-              price: variant.price,
-              quantity: 1,
-              selectedOptions: variant.selectedOptions || [],
+              price: priceAmount,
+              currency: currencyCode,
+              image: img?.url ?? "",
             })
           }
-          disabled={!variant || isLoading}
+          disabled={!variant || syncing}
           className="w-full bg-ink text-cream border-4 border-ink hover:bg-magenta"
         >
-          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "ADD TO CART"}
+          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : "ADD TO CART"}
         </Button>
       </div>
     </article>
