@@ -47,3 +47,8 @@ if (supabaseUrl && supabaseAnonKey) {
 }
 
 export const supabase: SupabaseClient = supabaseInstance;
+
+/** True when both env vars are present and a real client was created.
+ *  Use this to guard realtime subscriptions and other features that
+ *  would spam WebSocket errors when Supabase is not configured. */
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
