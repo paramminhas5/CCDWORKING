@@ -71,10 +71,6 @@ const Index = () => {
         <MarqueeBySlot id="above-about" />
         <SectionReveal><About /></SectionReveal>
 
-        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
-          <SectionReveal><EarlyAccess /></SectionReveal>
-        </Suspense>
-
         {/* ── Events — one unified section, no repetition ── */}
         <SectionReveal><HomepageEvents /></SectionReveal>
 
@@ -91,6 +87,10 @@ const Index = () => {
         <MarqueeBySlot id="above-drops" />
         <Suspense fallback={<SectionFallback bg="bg-cream" />}>
           <SectionReveal id="drops"><Drops /></SectionReveal>
+        </Suspense>
+
+        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
+          <SectionReveal><EarlyAccess /></SectionReveal>
         </Suspense>
 
         <Contact />

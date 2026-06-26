@@ -68,28 +68,28 @@ const ARTISTS = ["SARTDAWG", "MERMAN", "DJAZZ", "HEDZ", "KAMARI", "VISHNU", "TAN
 // ── Tour stops ────────────────────────────────────────────────────────────────
 const STOPS = [
   {
-    num: "01", slug: "ccdxsocial-blr", city: "BANGALORE", venue: "Social, Indiranagar",
-    date: "Sun, 28 Jun 2026 · 4 PM till late", tagline: "The launch · where it all begins",
+    num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
+    date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The launch · where it all begins",
     desc: "Our home crowd, our first room. Outdoor pet zone from 4 PM with a vendor market, lookalike contest and portrait booth — dance floor opens inside at 8.",
-    lineup: "Lineup announced soon", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
+    lineup: "Startdawg · Merman · TBA", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
   },
   {
-    num: "02", slug: "ccdxsocial-mum", city: "MUMBAI", venue: "Antisocial, Khar",
-    date: "Sun, 26 Jul 2026 · 4 PM till late", tagline: "The style stop · midsummer energy",
+    num: "02", slug: "ccdxsocial-02", city: "MUMBAI", venue: "Antisocial, Khar",
+    date: "Sun, 27 Jul 2026 · 4 PM till late", tagline: "The style stop · midsummer energy",
     desc: "Mumbai brings the looks. Best-dressed contest (pets included), live grooming demo, and a photo corner that doubles as a portrait studio.",
     lineup: "Tansane · Merman · Taco", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: MUM_POSTER,
   },
   {
-    num: "03", slug: "ccdxsocial-hyd", city: "HYDERABAD", venue: "Social Mindspace, Hyderabad",
+    num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social Mindspace, Hyderabad",
     date: "Sun, 30 Aug 2026 · 4 PM till late", tagline: "The agility stop · pre-finale",
     desc: "The most physical edition. Two agility courses, timed speed runs, performance contest. Hyderabad's underground takes the late slot.",
     lineup: "Lineup TBA", bg: "bg-ink", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: HYD_POSTER,
   },
   {
-    num: "★", slug: "ccdxsocial-delhi", city: "DELHI / NCR", venue: "Venue TBA — large format",
+    num: "★", slug: "ccdxsocial-mega", city: "DELHI / NCR", venue: "Venue TBA — large format",
     date: "October 2026 (date soon)", tagline: "The grand finale · season closer",
     desc: "Everything the tour has been building toward. Outdoor stage, pet runway, agility finals, full lineup. One last Sunday with the whole pack in one place.",
     lineup: "Headliner + residents + guests from every city", bg: "bg-acid-yellow", text: "text-ink", accent: "text-magenta",

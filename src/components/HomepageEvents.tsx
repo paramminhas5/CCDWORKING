@@ -319,21 +319,34 @@ const HomepageEvents = () => {
                 >
                   <Link
                     to={`/events/${e.slug}`}
-                    className="block border-4 border-cream/15 p-4 hover:border-acid-yellow/50 hover:-translate-y-1 transition-all group"
+                    className="block border-4 border-cream/15 hover:border-acid-yellow/50 hover:-translate-y-1 transition-all group overflow-hidden"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h4 className="font-display text-cream text-lg leading-tight group-hover:text-acid-yellow transition-colors">
-                        {e.title.toUpperCase()}
-                      </h4>
-                      {e.pet_friendly && <span className="text-sm shrink-0">🐾</span>}
-                    </div>
-                    <p className="font-display text-cream/50 text-xs mb-1">{e.date}</p>
-                    <p className="text-cream/40 text-xs">{e.venue}, {e.city}</p>
-                    {e.series_tagline && (
-                      <p className="mt-2 font-display text-[9px] text-cream/30 tracking-widest uppercase">
-                        {e.series_tagline}
-                      </p>
+                    {/* Poster thumbnail */}
+                    {resolvePoster(e.poster_url) && (
+                      <div className="aspect-video bg-ink overflow-hidden border-b-2 border-cream/10">
+                        <img
+                          src={resolvePoster(e.poster_url)!}
+                          alt={`${e.title} poster`}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
                     )}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h4 className="font-display text-cream text-lg leading-tight group-hover:text-acid-yellow transition-colors">
+                          {e.title.toUpperCase()}
+                        </h4>
+                        {e.pet_friendly && <span className="text-sm shrink-0">🐾</span>}
+                      </div>
+                      <p className="font-display text-cream/50 text-xs mb-1">{e.date}</p>
+                      <p className="text-cream/40 text-xs">{e.venue}, {e.city}</p>
+                      {e.series_tagline && (
+                        <p className="mt-2 font-display text-[9px] text-cream/30 tracking-widest uppercase">
+                          {e.series_tagline}
+                        </p>
+                      )}
+                    </div>
                   </Link>
                 </motion.div>
               ))}
