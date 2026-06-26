@@ -25,9 +25,7 @@ import SEO from "@/components/SEO";
 import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Marquee from "@/components/Marquee";
-import RsvpDialog from "@/components/RsvpDialog";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
-import SeriesStrip from "@/components/SeriesStrip";
 import SafeCuratedEvents from "@/components/SafeCuratedEvents";
 
 // ── static fallback — always present, no DB needed ──────────────────────────
@@ -78,9 +76,11 @@ function useCountdown(target: Date | null) {
 
 
 // ── main component ───────────────────────────────────────────────────────────
+type FilterTab = "all" | "upcoming" | "past" | "series";
+
 const Events = () => {
   const [all, setAll] = useState<EventRow[]>(STATIC_ROWS);
-  const [rsvpOpen, setRsvpOpen] = useState(false);
+  const [filter, setFilter] = useState<FilterTab>("all");
 
   // Attempt DB hydration — fall back silently to static data
   useEffect(() => {
@@ -114,6 +114,16 @@ const Events = () => {
          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     [safeAll],
   );
+
+  // Filtered events for the grid section
+  const filteredEvents = useMemo(() => {
+    switch (filter) {
+      case "upcoming": return upcoming;
+      case "past": return past;
+      case "series": return seriesEvents;
+      default: return safeAll;
+    }
+  }, [filter, safeAll, upcoming, past, seriesEvents]);
 
   // Countdown target from next event date
   const countdownTarget = useMemo(() => {
@@ -368,18 +378,11 @@ const Events = () => {
                     </p>
 
                     <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setRsvpOpen(true)}
-                        className="bg-acid-yellow text-ink font-display text-lg md:text-xl px-7 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-                      >
-                        {content.cta_label ?? "RSVP NOW →"}
-                      </button>
                       <Link
                         to={`/events/${nextEvent.slug}`}
-                        className="bg-cream text-ink font-display text-lg md:text-xl px-7 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center"
+                        className="bg-acid-yellow text-ink font-display text-lg md:text-xl px-7 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
                       >
-                        VIEW DETAILS
+                        {content.cta_label ?? "VIEW EVENT & RSVP →"}
                       </Link>
                     </div>
                   </div>
@@ -390,56 +393,125 @@ const Events = () => {
         })()}
 
 
-        {/* ── 5. PAST EPISODES ── */}
-        {past.length > 0 && (
-          <section className="bg-cream border-y-4 border-ink py-12 md:py-16">
-            <div className="container">
-              <p className="font-display text-magenta text-base md:text-lg mb-3">/ RECAP</p>
-              <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight mb-8">
-                PAST EPISODES.
-              </h2>
+        {/* ── 5. FILTER TABS + ALL EVENTS GRID ── */}
+        <section className="bg-cream border-y-4 border-ink py-12 md:py-16">
+          <div className="container">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+              <div>
+                <p className="font-display text-magenta text-base md:text-lg mb-3">/ ALL EVENTS</p>
+                <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight">
+                  BROWSE THE ARCHIVE.
+                </h2>
+              </div>
+              {/* Filter tabs */}
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: "all", label: "ALL" },
+                  { key: "upcoming", label: "UPCOMING" },
+                  { key: "past", label: "PAST" },
+                  { key: "series", label: "CCD × SOCIAL" },
+                ] as const).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    className={`font-display text-xs px-4 py-2 border-4 border-ink transition-all ${
+                      filter === key
+                        ? "bg-ink text-cream chunk-shadow"
+                        : "bg-cream text-ink hover:bg-acid-yellow"
+                    }`}
+                  >
+                    {label}
+                    {key !== "all" && (
+                      <span className="ml-1.5 opacity-50">
+                        ({key === "upcoming" ? upcoming.length : key === "past" ? past.length : seriesEvents.length})
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Events grid */}
+            {filteredEvents.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="font-display text-ink/40 text-xl">No events found.</p>
+              </div>
+            ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {past.map((e) => {
+                {filteredEvents.map((e, i) => {
                   const src = resolvePoster(e.poster_url);
+                  const isPast = e.status === "past";
                   return (
-                    <Link
+                    <motion.div
                       key={e.slug}
-                      to={`/events/${e.slug}`}
-                      className="group block bg-background border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform"
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.1 }}
+                      transition={{ delay: Math.min(i * 0.05, 0.3), type: "spring", stiffness: 200, damping: 22 }}
                     >
-                      <div className="relative bg-ink border-b-4 border-ink aspect-video overflow-hidden">
-                        {src ? (
-                          <img
-                            src={src}
-                            alt={`${e.title} poster`}
-                            loading="lazy"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-3xl">
-                            ★ {e.title}
+                      <Link
+                        to={`/events/${e.slug}`}
+                        className="group block bg-background border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform h-full"
+                      >
+                        <div className="relative bg-ink border-b-4 border-ink aspect-video overflow-hidden">
+                          {src ? (
+                            <img
+                              src={src}
+                              alt={`${e.title} poster`}
+                              loading="lazy"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-2xl p-4 text-center">
+                              {e.title}
+                            </div>
+                          )}
+                          {/* Status + series badges */}
+                          <div className="absolute top-2 left-2 flex gap-1.5">
+                            <span className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${
+                              isPast ? "bg-ink text-cream" : "bg-acid-yellow text-ink"
+                            }`}>
+                              {isPast ? "PAST" : "UPCOMING"}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="p-5">
-                        <span className="inline-block bg-ink text-cream text-[10px] font-bold px-2 py-0.5 border-2 border-ink uppercase tracking-widest mb-3">
-                          PAST EPISODE
-                        </span>
-                        <h3 className="font-display text-2xl md:text-3xl text-ink leading-tight mb-1 break-words">
-                          {e.title.toUpperCase()}
-                        </h3>
-                        <p className="text-ink/60 font-medium text-sm">
-                          {e.date} · {e.city} · {e.venue}
-                        </p>
-                      </div>
-                    </Link>
+                          {e.series_label && (
+                            <div className="absolute bottom-2 right-2">
+                              <span className="font-display text-[9px] px-2 py-0.5 bg-electric-blue text-cream border border-cream/30">
+                                {e.series_label}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-5">
+                          <h3 className="font-display text-xl md:text-2xl text-ink leading-tight mb-1 break-words group-hover:text-magenta transition-colors">
+                            {e.title.toUpperCase()}
+                          </h3>
+                          <p className="text-ink/60 font-medium text-sm mb-2">
+                            {e.date} · {e.city} · {e.venue}
+                          </p>
+                          {e.pet_friendly && (
+                            <span className="inline-block text-xs font-display text-electric-blue">🐾 Pet-friendly</span>
+                          )}
+                          {e.series_tagline && (
+                            <p className="mt-2 text-[10px] font-display text-ink/40 tracking-widest uppercase">
+                              {e.series_tagline}
+                            </p>
+                          )}
+                          {!isPast && (
+                            <p className="mt-3 font-display text-xs text-magenta uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                              VIEW & RSVP →
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    </motion.div>
                   );
                 })}
               </div>
-            </div>
-          </section>
-        )}
+            )}
+          </div>
+        </section>
 
         {/* ── 6. CURATED EVENTS from Bangalore ── */}
         <SafeCuratedEvents />
@@ -464,18 +536,6 @@ const Events = () => {
 
         <Footer />
       </main>
-
-      {/* RSVP dialog — scoped to next upcoming event */}
-      {nextEvent && (
-        <RsvpDialog
-          open={rsvpOpen}
-          onOpenChange={setRsvpOpen}
-          eventSlug={nextEvent.slug}
-          eventTitle={`Cats Can Dance — ${nextEvent.title}`}
-          eventDate={nextEvent.date}
-          eventVenue={nextEvent.venue}
-        />
-      )}
     </>
   );
 };
