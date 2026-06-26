@@ -9,12 +9,10 @@
  * The EventDetail component receives the event as a prop and renders immediately.
  */
 import type { GetStaticPaths, GetStaticProps } from "next";
-import dynamic from "next/dynamic";
 import { getStaticEventRow, EVENT_ROWS } from "@/content/events";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import type { EventRow } from "@/types/events";
-
-const EventDetailPage = dynamic(() => import("@/pages/EventDetail"), { ssr: false });
+import EventDetailPage from "@/pages/EventDetail";
 
 interface Props {
   event: EventRow;

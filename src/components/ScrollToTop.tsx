@@ -1,13 +1,29 @@
+/**
+ * ScrollToTop — scrolls to top on route change.
+ *
+ * Works with Lenis smooth scroll by using both:
+ * 1. Lenis's own scrollTo(0) method (handles the smooth scroll container)
+ * 2. window.scrollTo as fallback (in case Lenis isn't ready)
+ */
 import { useEffect } from "react";
-import { useLocation } from "@/lib/compat-router";
+import { useRouter } from "next/router";
+import { useLenis } from "lenis/react";
 
 const ScrollToTop = () => {
-  const { pathname, hash } = useLocation();
+  const router = useRouter();
+  const lenis = useLenis();
 
   useEffect(() => {
-    if (hash) return;
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
-  }, [pathname, hash]);
+    // Skip if navigating to a hash anchor
+    if (window.location.hash) return;
+
+    // Use Lenis scrollTo if available, otherwise native
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+    }
+  }, [router.asPath, lenis]);
 
   return null;
 };

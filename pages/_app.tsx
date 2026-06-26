@@ -53,6 +53,8 @@ function PageTransition() {
 }
 
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -63,7 +65,7 @@ export default function App({ Component, pageProps }: AppProps) {
           <DiscoProvider>
             <SmoothScroll>
               <ScrollToTop />
-              <Component {...pageProps} />
+              <Component {...pageProps} key={router.asPath} />
               <ThemeSwitcher />
             </SmoothScroll>
           </DiscoProvider>
