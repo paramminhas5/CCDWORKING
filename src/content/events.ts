@@ -67,7 +67,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "The first chapter. Outdoor floor at Indiranagar Social from 4 PM — vendor market, dogs and cats welcome, good people. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it through to close. Free entry, RSVP only.",
+      "The first chapter. An outdoor afternoon at Indiranagar Social from 4 PM — dogs and cats welcome, good people, the kind of day you don't plan around. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it all the way through to close. Free entry, RSVP only.",
     lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Shantam"],
     status: "upcoming",
     poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
@@ -174,7 +174,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     cta_label: "RSVP →",
 
     narrative:
-      "The first chapter. Wide open, easy yes, first impression. The afternoon is yours from 4 PM: outdoor floor, vendor market, pets welcome. Music kicks off at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Shantam closing it out.",
+      "The first chapter. Wide open, easy yes, first impression. The afternoon is yours from 4 PM — show up, find your people, bring the dog. Music starts at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Shantam closing it out. No charge. Just your name on the list.",
 
     vibe_pillars: [
       { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carrying the night through to close." },
@@ -186,7 +186,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     peak_time:  "9 PM — close",
 
     schedule: [
-      { time: "4:00 PM",  what: "Gates open · vendor market" },
+      { time: "4:00 PM",  what: "Gates open · outdoor floor" },
       { time: "4:30 PM",  what: "Open deck winners", highlight: true },
       { time: "6:00 PM",  what: "Agent Bugs", highlight: true },
       { time: "7:30 PM",  what: "Groovier", highlight: true },
