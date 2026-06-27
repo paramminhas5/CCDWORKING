@@ -174,7 +174,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     cta_label: "RSVP →",
 
     narrative:
-      "The first chapter. Wide open, easy yes, first impression. The afternoon is yours from 4 PM — show up, find your people, bring the dog. Music starts at 4:30 with open deck winners and runs deep into the night through Agent Bugs, Groovier, Sartdawg, and Shantam closing it out. No charge. Just your name on the list.",
+      "We're taking over the outdoor floor at Indiranagar Social on Sunday, June 29. Doors open at 4 PM — bring your dog, grab a drink, and ease into it. Open deck winners kick things off at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carries it all the way to close. Free entry, just RSVP so we have your name at the door.",
 
     vibe_pillars: [
       { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carrying the night through to close." },
