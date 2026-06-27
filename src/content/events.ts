@@ -67,7 +67,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "The first chapter. An outdoor afternoon at Indiranagar Social from 4 PM — dogs and cats welcome, good people, the kind of day you don't plan around. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it all the way through to close. Free entry, RSVP only.",
+      "Taking over the ground floor at Indiranagar Social from 4 PM — dogs and cats welcome, good people, the kind of day you don't plan around. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it all the way through to close. RSVP only.",
     lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Shantam"],
     status: "upcoming",
     poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
@@ -174,11 +174,11 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     cta_label: "RSVP →",
 
     narrative:
-      "We're taking over the outdoor floor at Indiranagar Social on Sunday, June 29. Doors open at 4 PM — bring your dog, grab a drink, and ease into it. Open deck winners kick things off at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carries it all the way to close. Free entry, just RSVP so we have your name at the door.",
+      "We're taking over the ground floor at Indiranagar Social on Sunday, June 29. Doors open at 4 PM — bring your dog, grab a drink, and ease into it. Open deck winners kick things off at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carries it all the way to close. Just RSVP so we have your name at the door.",
 
     vibe_pillars: [
       { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carrying the night through to close." },
-      { icon: "🪩", label: "FLOOR",  desc: "Outdoor floor at Indiranagar Social. Free entry, RSVP only. No dress code beyond showing up." },
+      { icon: "🪩", label: "FLOOR",  desc: "Ground floor at Indiranagar Social. No dress code — just show up." },
       { icon: "🐾", label: "PETS",   desc: "Dogs and cats welcome all afternoon. Come with the pack." },
     ],
 
@@ -244,7 +244,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
       "INDIRANAGAR SOCIAL",
       "AGENT BUGS · GROOVIER · SARTDAWG · SHANTAM",
       "DOORS 4 PM",
-      "FREE ENTRY",
+      "RSVP ONLY",
     ],
   },
 
