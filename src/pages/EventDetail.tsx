@@ -243,7 +243,7 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
                   {event.title.toUpperCase()}
                 </h1>
 
-                <div className="grid grid-cols-3 gap-3 md:gap-4 max-w-xl mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 max-w-xl mb-6">
                   <Field label="DATE" value={event.date} accent={isUpcoming} />
                   <Field label="VENUE" value={event.venue} accent={isUpcoming} />
                   <Field label="CITY" value={event.city} accent={isUpcoming} />
