@@ -16,6 +16,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { Link } from "@/lib/compat-router";
 import { parseEventDate } from "@/lib/parse-date";
+import { supabase } from "@/lib/supabase";
 import { getEventContent, EVENT_ROWS } from "@/content/events";
 import { resolvePoster } from "@/lib/poster";
 import type { EventRow } from "@/types/events";
