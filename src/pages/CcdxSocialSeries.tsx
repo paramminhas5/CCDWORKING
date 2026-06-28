@@ -12,6 +12,7 @@ import catDancer from "@/assets/cat-dancer.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catHeadphones from "@/assets/cat-headphones-dance.png";
 import catRaver from "@/assets/cat-raver.png";
+import catDjHero from "@/assets/cat-dj-hero.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
