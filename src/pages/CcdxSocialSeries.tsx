@@ -72,7 +72,7 @@ const ARTISTS = ["AGENT BUGS", "GROOVIER", "SARTDAWG", "SHANTAM", "TBC BOMBAY", 
 const STOPS = [
   {
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
-    date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
+    date: "Sun, 28 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
     desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
     lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER, posterFallback: BLR_POSTER_CDN,
@@ -118,7 +118,7 @@ const jsonLd = {
   url: "https://catscandance.com/ccdxsocial",
   organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
   subEvent: [
-    { "@type": "Event", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-29", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
+    { "@type": "Event", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-28", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
     { "@type": "Event", name: "CCD × SOCIAL — Mumbai", startDate: "2026-07-26", location: { "@type": "Place", name: "Antisocial, Khar", address: "Mumbai, IN" } },
     { "@type": "Event", name: "CCD × SOCIAL — Hyderabad", startDate: "2026-08-30", location: { "@type": "Place", name: "Social, Hyderabad", address: "Hyderabad, IN" } },
     { "@type": "Event", name: "CCD × SOCIAL — Delhi NCR (Finale)", startDate: "2026-10-01", location: { "@type": "Place", name: "TBA", address: "Delhi NCR, IN" } },
@@ -248,7 +248,7 @@ export default function CcdxSocialSeries() {
                         </div>
                       ))}
                     </div>
-                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 29 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
+                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 28 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -266,7 +266,7 @@ export default function CcdxSocialSeries() {
 
 
         {/* ── MARQUEE ── */}
-        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 29 JUN", "BOMBAY JULY", "HYDERABAD AUGUST", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
+        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 28 JUN", "BOMBAY JULY", "HYDERABAD AUGUST", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
 
         {/* ── HOW IT WORKS ── */}
         <section className="bg-cream py-12 md:py-16 border-b-4 border-ink relative overflow-hidden">
