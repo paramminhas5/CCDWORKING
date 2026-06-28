@@ -88,7 +88,14 @@ const Events = () => {
           .select("*")
           .order("sort_order", { ascending: true });
         if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setAll(data as unknown as EventRow[]);
+          // Prefer the curated local poster path from the static catalogue over
+          // whatever is stored in Supabase (which may be null or a stale storage
+          // URL). Mirrors the same merge already done in [slug].tsx getStaticProps.
+          const merged = (data as unknown as EventRow[]).map((row) => ({
+            ...row,
+            poster_url: EVENT_ROWS[row.slug]?.poster_url || row.poster_url || null,
+          }));
+          setAll(merged);
         }
       } catch {
         // stay on static fallback
