@@ -17,6 +17,7 @@ import { Link } from "@/lib/compat-router";
 import { supabase } from "@/lib/supabase";
 import { parseEventDate } from "@/lib/parse-date";
 import { EVENT_ROWS } from "@/content/events";
+import { resolvePoster } from "@/lib/poster";
 import type { EventRow } from "@/types/events";
 
 // ── Static fallback ───────────────────────────────────────────────────────────
@@ -54,30 +55,6 @@ function useCountdown(target: Date | null) {
 }
 
 const Pad = (n: number) => String(n).padStart(2, "0");
-
-// ── Poster resolver (memoized) ───────────────────────────────────────────────
-// Cache resolved poster URLs to avoid redundant Supabase storage calls
-const posterCache = new Map<string, string | null>();
-
-function resolvePoster(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const v = raw.trim();
-  if (!v) return null;
-  if (v.startsWith("http") || v.startsWith("/")) return v;
-
-  // Check cache first
-  if (posterCache.has(v)) return posterCache.get(v)!;
-
-  try {
-    const { data } = supabase.storage.from("posters").getPublicUrl(v);
-    const url = data?.publicUrl ?? null;
-    posterCache.set(v, url);
-    return url;
-  } catch {
-    posterCache.set(v, null);
-    return null;
-  }
-}
 
 // Map old Supabase titles to city display names — guards against stale DB data
 const SERIES_TITLE_MAP: Record<string, string> = {

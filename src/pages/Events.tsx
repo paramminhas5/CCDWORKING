@@ -16,8 +16,8 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { Link } from "@/lib/compat-router";
 import { parseEventDate } from "@/lib/parse-date";
-import { supabase } from "@/lib/supabase";
 import { getEventContent, EVENT_ROWS } from "@/content/events";
+import { resolvePoster } from "@/lib/poster";
 import type { EventRow } from "@/types/events";
 
 import Nav from "@/components/Nav";
@@ -35,20 +35,6 @@ const STATIC_ROWS: EventRow[] = Object.values(EVENT_ROWS).sort(
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const Pad = (n: number) => String(n).padStart(2, "0");
-
-
-function resolvePoster(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const v = raw.trim();
-  if (!v) return null;
-  if (v.startsWith("http") || v.startsWith("/")) return v;
-  try {
-    const { data } = supabase.storage.from("posters").getPublicUrl(v);
-    return data?.publicUrl ?? `/${v}`;
-  } catch {
-    return `/${v}`;
-  }
-}
 
 // ── countdown hook (SSR-safe, no hydration mismatch) ────────────────────────
 function useCountdown(target: Date | null) {
