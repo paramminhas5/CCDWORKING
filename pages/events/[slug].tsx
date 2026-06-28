@@ -56,16 +56,18 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
 
   // 3. For known slugs, always prefer curated static fields over stale Supabase data.
   //    title, lineup: must match the live show exactly.
-  //    blurb: controls SEO meta description — keep the curated copy, not whatever is in the DB.
-  //    date: the static row has the authoritative date string.
+  //    blurb, date: controlled by static content for SEO consistency.
+  //    poster_url: use Supabase if it has a real URL (admin-uploaded), otherwise
+  //                fall back to the static local path (served from public/posters/).
   const staticRow = getStaticEventRow(slug);
   if (staticRow && event) {
     event = {
       ...event,
-      title:  staticRow.title,
-      lineup: staticRow.lineup ?? event.lineup,
-      blurb:  staticRow.blurb  ?? event.blurb,
-      date:   staticRow.date   ?? event.date,
+      title:      staticRow.title,
+      lineup:     staticRow.lineup     ?? event.lineup,
+      blurb:      staticRow.blurb      ?? event.blurb,
+      date:       staticRow.date       ?? event.date,
+      poster_url: event.poster_url     || staticRow.poster_url,
     };
   }
 

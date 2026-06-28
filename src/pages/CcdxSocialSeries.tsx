@@ -12,15 +12,16 @@ import catDancer from "@/assets/cat-dancer.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catHeadphones from "@/assets/cat-headphones-dance.png";
 import catRaver from "@/assets/cat-raver.png";
+import catDjHero from "@/assets/cat-dj-hero.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
-// TODO: Upload posters to Supabase Storage ("posters" bucket) and replace nulls
-// with the public URLs: https://YOUR_PROJECT.supabase.co/storage/v1/object/public/posters/filename.jpg
-const HERO_ART: string | null = null;
-const BLR_POSTER: string | null = null;
-const MUM_POSTER: string | null = null;
-const HYD_POSTER: string | null = null;
+// Hero uses the local cat-dj-hero.png asset (always available, no CDN needed).
+// Event poster cards use public/posters/ — drop JPGs there to replace placeholders.
+// See public/posters/README.md for the full list of expected filenames.
+const BLR_POSTER = "/posters/ccdxsocial-blr.jpg";
+const MUM_POSTER = "/posters/ccdxsocial-mum.jpg";
+const HYD_POSTER = "/posters/ccdxsocial-hyd.jpg";
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ export default function CcdxSocialSeries() {
         {/* ── HERO ── */}
         <section ref={heroRef} className="relative bg-cream text-ink pt-20 md:pt-24 pb-8 md:pb-10 border-b-4 border-ink overflow-hidden md:min-h-[72vh] md:max-h-[80vh]">
           <motion.div style={{ y: heroArtY, scale: heroArtScale }} className="absolute inset-0 md:left-[40%] z-0">
-            {HERO_ART && <img src={HERO_ART} alt="" aria-hidden className="w-full h-full object-cover object-center" />}
+            <img src={imgUrl(catDjHero)} alt="" aria-hidden className="w-full h-full object-cover object-center" />
             <div className="absolute inset-0 bg-gradient-to-r from-cream via-cream/85 md:via-cream/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-cream to-transparent" />
           </motion.div>
