@@ -84,7 +84,7 @@ export default function Document() {
               "alternateName": "CCD",
               "url": "https://catscandance.com",
               "logo": "https://catscandance.com/ccd-logo.png",
-              "image": "https://catscandance.com/og-image.jpg",
+              "image": "https://catscandance.com/ccd-logo.png",
               "description": "Cats Can Dance is a Bangalore, India brand running underground dance music Episodes and a streetwear label.",
               "foundingDate": "2024",
               "address": {

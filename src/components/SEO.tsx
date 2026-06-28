@@ -13,7 +13,7 @@ type Props = {
 };
 
 const SITE = "https://catscandance.com";
-const DEFAULT_OG = `${SITE}/og-image.jpg?v=2`;
+const DEFAULT_OG = `${SITE}/ccd-logo.png`;
 
 const absolute = (img: string) =>
   img.startsWith("http") ? img : `${SITE}${img.startsWith("/") ? "" : "/"}${img}`;
@@ -76,12 +76,10 @@ const SEO = ({
       <meta key="og:image" property="og:image" content={og} />
       <meta key="og:image:secure_url" property="og:image:secure_url" content={og} />
       <meta key="og:image:type" property="og:image:type" content={ogType} />
-      <meta key="og:image:width" property="og:image:width" content="1200" />
-      <meta key="og:image:height" property="og:image:height" content="630" />
       <meta key="og:image:alt" property="og:image:alt" content={alt} />
 
       {/* Twitter */}
-      <meta key="twitter:card" name="twitter:card" content="summary_large_image" />
+      <meta key="twitter:card" name="twitter:card" content="summary" />
       <meta key="twitter:site" name="twitter:site" content="@catscan.dance" />
       <meta key="twitter:creator" name="twitter:creator" content="@catscan.dance" />
       <meta key="twitter:title" name="twitter:title" content={title} />
