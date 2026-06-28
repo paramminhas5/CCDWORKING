@@ -12,13 +12,16 @@ import catDancer from "@/assets/cat-dancer.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catHeadphones from "@/assets/cat-headphones-dance.png";
 import catRaver from "@/assets/cat-raver.png";
+import catDjHero from "@/assets/cat-dj-hero.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
-const HERO_ART  = "https://catscandance.com/__l5e/assets-v1/11213fcd-6f31-4eba-bc35-b68a0c039d14/ccdxsocial-hero.png";
-const BLR_POSTER = "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg";
-const MUM_POSTER = "https://catscandance.com/__l5e/assets-v1/c77b5b48-b34f-4add-a877-c1fd3caad34f/ccdxsocial-mum-poster.jpg";
-const HYD_POSTER = "https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-a548-c2148faf8a02/ccdxsocial-hyd-poster.jpg";
+// BLR poster: served from local public/posters/ (committed, always available)
+// MUM / HYD:  no local file yet — CDN URL tried first, then "POSTER COMING SOON"
+const BLR_POSTER      = "/posters/ccdxsocial-blr.jpg";
+const BLR_POSTER_CDN  = "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg";
+const MUM_POSTER_CDN  = "https://catscandance.com/__l5e/assets-v1/c77b5b48-b34f-4add-a877-c1fd3caad34f/ccdxsocial-mum-poster.jpg";
+const HYD_POSTER_CDN  = "https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-a548-c2148faf8a02/ccdxsocial-hyd-poster.jpg";
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -72,21 +75,21 @@ const STOPS = [
     date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
     desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
     lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
-    badge: "next" as const, poster: BLR_POSTER,
+    badge: "next" as const, poster: BLR_POSTER, posterFallback: BLR_POSTER_CDN,
   },
   {
     num: "02", slug: "ccdxsocial-02", city: "BOMBAY", venue: "Social, Bombay (TBC)",
     date: "Sun, 26 Jul 2026 · 4 PM till late", tagline: "The second show · Bombay energy",
     desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, dogs and cats welcome, the floor opens after dark.",
     lineup: "Lineup TBA", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
-    badge: null, poster: MUM_POSTER,
+    badge: null, poster: null, posterFallback: MUM_POSTER_CDN,
   },
   {
     num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social, Hyderabad (TBC)",
     date: "Sun, 30 Aug 2026 · 4 PM till late", tagline: "The third show · Hyderabad",
     desc: "The series hits Hyderabad. Outdoor afternoon, pets welcome, real music. The underground takes the late slot.",
     lineup: "Lineup TBA", bg: "bg-ink", text: "text-cream", accent: "text-acid-yellow",
-    badge: null, poster: HYD_POSTER,
+    badge: null, poster: null, posterFallback: HYD_POSTER_CDN,
   },
   {
     num: "04", slug: "ccdxsocial-mega", city: "DELHI", venue: "Venue TBA",
@@ -123,10 +126,22 @@ const jsonLd = {
 };
 
 
-// Poster image with automatic "POSTER COMING SOON" fallback on load failure
-function PosterImg({ src, city }: { src: string; city: string }) {
-  const [err, setErr] = useState(false);
-  if (err) {
+// Poster image: tries primary src, falls back to fallbackSrc, then shows placeholder
+function PosterImg({ src, fallbackSrc, city }: { src: string | null; fallbackSrc?: string; city: string }) {
+  const initial = src || fallbackSrc || null;
+  const [current, setCurrent] = useState<string | null>(initial);
+  const [failed, setFailed] = useState(!initial);
+
+  const handleError = () => {
+    // If we just failed on the primary, try the CDN fallback
+    if (current === src && fallbackSrc && fallbackSrc !== src) {
+      setCurrent(fallbackSrc);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  if (failed || !current) {
     return (
       <div className="border-4 border-dashed border-cream/60 aspect-[3/4] grid place-items-center text-center p-3">
         <div><p className="font-display text-4xl">★</p><p className="font-display text-[10px] mt-2 opacity-80">POSTER COMING SOON</p></div>
@@ -136,11 +151,11 @@ function PosterImg({ src, city }: { src: string; city: string }) {
   return (
     <div className="border-4 border-cream chunk-shadow overflow-hidden aspect-[3/4]">
       <img
-        src={src}
+        src={current}
         alt={`CCD × Social ${city} poster`}
         className="w-full h-full object-cover block"
         loading="lazy"
-        onError={() => setErr(true)}
+        onError={handleError}
       />
     </div>
   );
@@ -189,7 +204,7 @@ export default function CcdxSocialSeries() {
         {/* ── HERO ── */}
         <section ref={heroRef} className="relative bg-cream text-ink pt-20 md:pt-24 pb-8 md:pb-10 border-b-4 border-ink overflow-hidden md:min-h-[72vh] md:max-h-[80vh]">
           <motion.div style={{ y: heroArtY, scale: heroArtScale }} className="absolute inset-0 md:left-[40%] z-0">
-            <img src={HERO_ART} alt="" aria-hidden className="w-full h-full object-cover object-center" />
+            <img src={imgUrl(catDjHero)} alt="" aria-hidden className="w-full h-full object-cover object-center" />
             <div className="absolute inset-0 bg-gradient-to-r from-cream via-cream/85 md:via-cream/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-cream to-transparent" />
           </motion.div>
@@ -377,13 +392,7 @@ export default function CcdxSocialSeries() {
                           </div>
                         </div>
                         <div className="w-full md:w-44 lg:w-52 shrink-0">
-                          {stop.poster ? (
-                            <PosterImg src={stop.poster} city={stop.city} />
-                          ) : (
-                            <div className="border-4 border-dashed border-cream/60 aspect-[3/4] grid place-items-center text-center p-3">
-                              <div><p className="font-display text-4xl">★</p><p className="font-display text-[10px] mt-2 opacity-80">POSTER COMING SOON</p></div>
-                            </div>
-                          )}
+                          <PosterImg src={stop.poster ?? null} fallbackSrc={stop.posterFallback} city={stop.city} />
                         </div>
                       </div>
                     </div>

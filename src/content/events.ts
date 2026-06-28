@@ -70,7 +70,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
       "Taking over the ground floor at Indiranagar Social from 4 PM — dogs and cats welcome, good people, the kind of day you don't plan around. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it all the way through to close. RSVP only.",
     lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Shantam"],
     status: "upcoming",
-    poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
+    poster_url: "/posters/ccdxsocial-blr.jpg",
     sort_order: 1,
     series: "ccdxsocial",
     series_label: "CCD × SOCIAL",
