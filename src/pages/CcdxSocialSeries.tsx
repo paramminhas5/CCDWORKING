@@ -126,7 +126,28 @@ const jsonLd = {
 };
 
 
-// ── Floating scroll-cats (decorative parallax) ────────────────────────────────
+// Poster image with automatic "POSTER COMING SOON" fallback on load failure
+function PosterImg({ src, city }: { src: string; city: string }) {
+  const [err, setErr] = useState(false);
+  if (err) {
+    return (
+      <div className="border-4 border-dashed border-cream/60 aspect-[3/4] grid place-items-center text-center p-3">
+        <div><p className="font-display text-4xl">★</p><p className="font-display text-[10px] mt-2 opacity-80">POSTER COMING SOON</p></div>
+      </div>
+    );
+  }
+  return (
+    <div className="border-4 border-cream chunk-shadow overflow-hidden aspect-[3/4]">
+      <img
+        src={src}
+        alt={`CCD × Social ${city} poster`}
+        className="w-full h-full object-cover block"
+        loading="lazy"
+        onError={() => setErr(true)}
+      />
+    </div>
+  );
+}
 function ScrollCats() {
   const { scrollY } = useScroll();
   const y1 = useTransform(scrollY, [0, 3000], [0, -400]);
@@ -360,9 +381,7 @@ export default function CcdxSocialSeries() {
                         </div>
                         <div className="w-full md:w-44 lg:w-52 shrink-0">
                           {stop.poster ? (
-                            <div className="border-4 border-cream chunk-shadow overflow-hidden aspect-[3/4]">
-                              <img src={stop.poster} alt={`CCD × Social ${stop.city} poster`} className="w-full h-full object-cover block" loading="lazy" />
-                            </div>
+                            <PosterImg src={stop.poster} city={stop.city} />
                           ) : (
                             <div className="border-4 border-dashed border-cream/60 aspect-[3/4] grid place-items-center text-center p-3">
                               <div><p className="font-display text-4xl">★</p><p className="font-display text-[10px] mt-2 opacity-80">POSTER COMING SOON</p></div>

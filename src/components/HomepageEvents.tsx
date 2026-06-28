@@ -187,7 +187,9 @@ const HomepageEvents = () => {
                     <img
                       src={poster}
                       alt={`${featured.title} poster`}
+                      loading="eager"
                       className="w-full max-w-sm aspect-[3/4] object-cover border-4 border-cream/20 group-hover:border-acid-yellow transition-colors duration-300"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                     />
                   </Link>
                 </motion.div>
@@ -377,6 +379,7 @@ const HomepageEvents = () => {
                           alt={`${e.title} poster`}
                           loading="lazy"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
                         />
                       </div>
                     )}
