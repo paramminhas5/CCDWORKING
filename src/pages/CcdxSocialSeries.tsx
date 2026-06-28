@@ -12,16 +12,13 @@ import catDancer from "@/assets/cat-dancer.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catHeadphones from "@/assets/cat-headphones-dance.png";
 import catRaver from "@/assets/cat-raver.png";
-import catDj from "@/assets/cat-dj.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
-// Hero uses the local cat-dj-hero.png asset (always available, no CDN needed).
-// Event poster cards use public/posters/ — drop JPGs there to replace placeholders.
-// See public/posters/README.md for the full list of expected filenames.
-const BLR_POSTER = "/posters/ccdxsocial-blr.jpg";
-const MUM_POSTER = null;
-const HYD_POSTER = null;
+const HERO_ART  = "https://catscandance.com/__l5e/assets-v1/11213fcd-6f31-4eba-bc35-b68a0c039d14/ccdxsocial-hero.png";
+const BLR_POSTER = "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg";
+const MUM_POSTER = "https://catscandance.com/__l5e/assets-v1/c77b5b48-b34f-4add-a877-c1fd3caad34f/ccdxsocial-mum-poster.jpg";
+const HYD_POSTER = "https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-a548-c2148faf8a02/ccdxsocial-hyd-poster.jpg";
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -72,21 +69,21 @@ const ARTISTS = ["AGENT BUGS", "GROOVIER", "SARTDAWG", "SHANTAM", "TBC BOMBAY", 
 const STOPS = [
   {
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
-    date: "Sun, 28 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
-    desc: "Home crowd, first floor. An outdoor afternoon from 4 PM — dogs and cats welcome, good people. Music from 4:30 through Agent Bugs, Groovier, Sartdawg and Shantam to close.",
+    date: "Sun, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
+    desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
     lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
   },
   {
     num: "02", slug: "ccdxsocial-02", city: "BOMBAY", venue: "Social, Bombay (TBC)",
-    date: "July 2026", tagline: "The second show · Bombay energy",
+    date: "Sun, 26 Jul 2026 · 4 PM till late", tagline: "The second show · Bombay energy",
     desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, dogs and cats welcome, the floor opens after dark.",
     lineup: "Lineup TBA", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: MUM_POSTER,
   },
   {
     num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social, Hyderabad (TBC)",
-    date: "August 2026", tagline: "The third show · Hyderabad",
+    date: "Sun, 30 Aug 2026 · 4 PM till late", tagline: "The third show · Hyderabad",
     desc: "The series hits Hyderabad. Outdoor afternoon, pets welcome, real music. The underground takes the late slot.",
     lineup: "Lineup TBA", bg: "bg-ink", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: HYD_POSTER,
@@ -118,10 +115,10 @@ const jsonLd = {
   url: "https://catscandance.com/ccdxsocial",
   organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
   subEvent: [
-    { "@type": "MusicEvent", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-28T16:00:00+05:30", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
-    { "@type": "MusicEvent", name: "CCD × SOCIAL — Mumbai", startDate: "2026-07-01", location: { "@type": "Place", name: "Social, Bombay", address: "Mumbai, IN" } },
-    { "@type": "MusicEvent", name: "CCD × SOCIAL — Hyderabad", startDate: "2026-08-01", location: { "@type": "Place", name: "Social, Hyderabad", address: "Hyderabad, IN" } },
-    { "@type": "MusicEvent", name: "CCD × SOCIAL — Delhi NCR (Finale)", startDate: "2026-10-01", location: { "@type": "Place", name: "TBA", address: "Delhi NCR, IN" } },
+    { "@type": "Event", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-29", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
+    { "@type": "Event", name: "CCD × SOCIAL — Mumbai", startDate: "2026-07-26", location: { "@type": "Place", name: "Antisocial, Khar", address: "Mumbai, IN" } },
+    { "@type": "Event", name: "CCD × SOCIAL — Hyderabad", startDate: "2026-08-30", location: { "@type": "Place", name: "Social, Hyderabad", address: "Hyderabad, IN" } },
+    { "@type": "Event", name: "CCD × SOCIAL — Delhi NCR (Finale)", startDate: "2026-10-01", location: { "@type": "Place", name: "TBA", address: "Delhi NCR, IN" } },
   ],
 };
 
@@ -192,7 +189,7 @@ export default function CcdxSocialSeries() {
         {/* ── HERO ── */}
         <section ref={heroRef} className="relative bg-cream text-ink pt-20 md:pt-24 pb-8 md:pb-10 border-b-4 border-ink overflow-hidden md:min-h-[72vh] md:max-h-[80vh]">
           <motion.div style={{ y: heroArtY, scale: heroArtScale }} className="absolute inset-0 md:left-[40%] z-0">
-            <img src={imgUrl(catDj)} alt="" aria-hidden className="w-full h-full object-cover object-center" />
+            <img src={HERO_ART} alt="" aria-hidden className="w-full h-full object-cover object-center" />
             <div className="absolute inset-0 bg-gradient-to-r from-cream via-cream/85 md:via-cream/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-cream to-transparent" />
           </motion.div>
@@ -236,7 +233,7 @@ export default function CcdxSocialSeries() {
                         </div>
                       ))}
                     </div>
-                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 28 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
+                    <div className="font-display text-[10px] mt-2 text-cream/70">SUN 29 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -254,7 +251,7 @@ export default function CcdxSocialSeries() {
 
 
         {/* ── MARQUEE ── */}
-        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 28 JUN", "BOMBAY JULY", "HYDERABAD AUGUST", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
+        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 29 JUN", "BOMBAY 26 JUL", "HYDERABAD 30 AUG", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
 
         {/* ── HOW IT WORKS ── */}
         <section className="bg-cream py-12 md:py-16 border-b-4 border-ink relative overflow-hidden">

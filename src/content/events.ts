@@ -63,14 +63,14 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-01": {
     slug: "ccdxsocial-01",
     title: "BANGALORE",
-    date: "Sun, Jun 28, 2026",
+    date: "Sun, Jun 29, 2026",
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
-      "Underground dance music at Indiranagar Social, Bangalore. Open decks, then Agent Bugs, Groovier, Sartdawg and Shantam carrying the night through to close. Dogs and cats welcome. RSVP only.",
+      "Taking over the ground floor at Indiranagar Social from 4 PM — dogs and cats welcome, good people, the kind of day you don't plan around. Open deck winners kick things off, then Agent Bugs, Groovier, Sartdawg, and Shantam carry it all the way through to close. RSVP only.",
     lineup: ["Open Deck Winners", "Agent Bugs", "Groovier", "Sartdawg", "Shantam"],
     status: "upcoming",
-    poster_url: "/posters/ccdxsocial-blr.jpg",
+    poster_url: "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg",
     sort_order: 1,
     series: "ccdxsocial",
     series_label: "CCD × SOCIAL",
@@ -83,7 +83,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-02": {
     slug: "ccdxsocial-02",
     title: "BOMBAY",
-    date: "July 2026",
+    date: "Sun, Jul 26, 2026",
     city: "Bombay",
     venue: "Social, Bombay (TBC)",
     blurb:
@@ -103,7 +103,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-03": {
     slug: "ccdxsocial-03",
     title: "HYDERABAD",
-    date: "August 2026",
+    date: "Sun, Aug 30, 2026",
     city: "Hyderabad",
     venue: "Social, Hyderabad (TBC)",
     blurb:
@@ -240,7 +240,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "BANGALORE · 28 JUN",
+      "BANGALORE · 29 JUN",
       "INDIRANAGAR SOCIAL",
       "AGENT BUGS · GROOVIER · SARTDAWG · SHANTAM",
       "DOORS 4 PM",
