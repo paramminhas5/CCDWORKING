@@ -53,15 +53,6 @@ const Index = () => {
         description="Discover India's underground electronic music scene. Events in Bengaluru, Mumbai, Delhi & Goa. Limited apparel drops. Free RSVP events."
         path="/"
         keywords="india electronic music, bangalore underground, cats can dance, ccd events, underground dance music india"
-        jsonLd={[{
-          "@context": "https://schema.org",
-          "@type": "Organization",
-          name: "Cats Can Dance",
-          url: "https://catscandance.com",
-          logo: "https://catscandance.com/og-image.png",
-          description: "Bangalore underground crew — dance music nights, limited apparel drops, and cool culture.",
-          sameAs: ["https://instagram.com/catscandance", "https://www.youtube.com/@catscandance"],
-        }]}
       />
       <main className="bg-background text-foreground">
         <Nav />

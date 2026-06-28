@@ -15,10 +15,12 @@ import catRaver from "@/assets/cat-raver.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
-const HERO_ART = "https://catscandance.com/__l5e/assets-v1/11213fcd-6f31-4eba-bc35-b68a0c039d14/ccdxsocial-hero.png";
-const BLR_POSTER = "https://catscandance.com/__l5e/assets-v1/4ec50939-9498-4ff9-b642-2a095db54775/ccdxsocial-blr-poster.jpg";
-const MUM_POSTER = "https://catscandance.com/__l5e/assets-v1/c77b5b48-b34f-4add-a877-c1fd3caad34f/ccdxsocial-mum-poster.jpg";
-const HYD_POSTER = "https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-a548-c2148faf8a02/ccdxsocial-hyd-poster.jpg";
+// TODO: Upload posters to Supabase Storage ("posters" bucket) and replace nulls
+// with the public URLs: https://YOUR_PROJECT.supabase.co/storage/v1/object/public/posters/filename.jpg
+const HERO_ART: string | null = null;
+const BLR_POSTER: string | null = null;
+const MUM_POSTER: string | null = null;
+const HYD_POSTER: string | null = null;
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -70,14 +72,14 @@ const STOPS = [
   {
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
     date: "Sun, 28 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
-    desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
+    desc: "Home crowd, first floor. An outdoor afternoon from 4 PM — dogs and cats welcome, good people. Music from 4:30 through Agent Bugs, Groovier, Sartdawg and Shantam to close.",
     lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
   },
   {
     num: "02", slug: "ccdxsocial-02", city: "BOMBAY", venue: "Social, Bombay (TBC)",
     date: "July 2026", tagline: "The second show · Bombay energy",
-    desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, vendor market, dogs and cats welcome, the floor opens after dark.",
+    desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, dogs and cats welcome, the floor opens after dark.",
     lineup: "Lineup TBA", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: MUM_POSTER,
   },
@@ -115,10 +117,10 @@ const jsonLd = {
   url: "https://catscandance.com/ccdxsocial",
   organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
   subEvent: [
-    { "@type": "Event", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-28", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
-    { "@type": "Event", name: "CCD × SOCIAL — Mumbai", startDate: "2026-07-26", location: { "@type": "Place", name: "Antisocial, Khar", address: "Mumbai, IN" } },
-    { "@type": "Event", name: "CCD × SOCIAL — Hyderabad", startDate: "2026-08-30", location: { "@type": "Place", name: "Social, Hyderabad", address: "Hyderabad, IN" } },
-    { "@type": "Event", name: "CCD × SOCIAL — Delhi NCR (Finale)", startDate: "2026-10-01", location: { "@type": "Place", name: "TBA", address: "Delhi NCR, IN" } },
+    { "@type": "MusicEvent", name: "CCD × SOCIAL — Bangalore", startDate: "2026-06-28T16:00:00+05:30", location: { "@type": "Place", name: "Social, Indiranagar", address: "Bengaluru, IN" } },
+    { "@type": "MusicEvent", name: "CCD × SOCIAL — Mumbai", startDate: "2026-07-01", location: { "@type": "Place", name: "Social, Bombay", address: "Mumbai, IN" } },
+    { "@type": "MusicEvent", name: "CCD × SOCIAL — Hyderabad", startDate: "2026-08-01", location: { "@type": "Place", name: "Social, Hyderabad", address: "Hyderabad, IN" } },
+    { "@type": "MusicEvent", name: "CCD × SOCIAL — Delhi NCR (Finale)", startDate: "2026-10-01", location: { "@type": "Place", name: "TBA", address: "Delhi NCR, IN" } },
   ],
 };
 
@@ -168,7 +170,7 @@ export default function CcdxSocialSeries() {
         {/* ── HERO ── */}
         <section ref={heroRef} className="relative bg-cream text-ink pt-20 md:pt-24 pb-8 md:pb-10 border-b-4 border-ink overflow-hidden md:min-h-[72vh] md:max-h-[80vh]">
           <motion.div style={{ y: heroArtY, scale: heroArtScale }} className="absolute inset-0 md:left-[40%] z-0">
-            <img src={HERO_ART} alt="" aria-hidden className="w-full h-full object-cover object-center" />
+            {HERO_ART && <img src={HERO_ART} alt="" aria-hidden className="w-full h-full object-cover object-center" />}
             <div className="absolute inset-0 bg-gradient-to-r from-cream via-cream/85 md:via-cream/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-cream to-transparent" />
           </motion.div>

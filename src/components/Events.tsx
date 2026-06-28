@@ -25,8 +25,6 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
-  // Skip dead Lovable CDN URLs — they 404 on catscandance.com
-  if (v.includes("/__l5e/")) return null;
   if (v.startsWith("http://") || v.startsWith("https://")) return v;
   if (v.startsWith("/")) return v;
   try {

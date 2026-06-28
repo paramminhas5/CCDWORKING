@@ -5,7 +5,9 @@ Contact: hello [at] catscandance.com
 Location: Worldwide
 
 /* SITE */
-Last update: 2026/04/21
+Last update: 2026/06/28
 Standards: HTML5, CSS3, JSON-LD
-Components: React, Vite, Tailwind, Framer Motion
-Backend: Lovable Cloud
+Language: TypeScript
+Framework: Next.js
+Backend: Supabase + Next.js
+Deployment: Netlify
