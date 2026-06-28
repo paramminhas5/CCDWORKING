@@ -327,6 +327,7 @@ const Events = () => {
                         priority
                         sizes="(max-width: 768px) 100vw, 45vw"
                         className="object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>
                   ) : (
@@ -464,6 +465,7 @@ const Events = () => {
                               fill
                               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                               className="object-cover group-hover:scale-105 transition-transform duration-500"
+                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
                             />
                           ) : (
                             <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-2xl p-4 text-center">
