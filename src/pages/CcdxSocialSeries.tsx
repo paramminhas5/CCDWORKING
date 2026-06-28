@@ -22,7 +22,7 @@ const HYD_POSTER = "https://catscandance.com/__l5e/assets-v1/02bd78b3-7f87-43df-
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
-const NEXT_SHOW_DATE = new Date("2026-06-28T19:30:00Z"); // 1 AM IST Jun 29
+const NEXT_SHOW_DATE = new Date("2026-06-29T10:30:00Z"); // 4 PM IST
 
 function useCountdown(target: Date) {
   const calc = () => {
@@ -69,7 +69,7 @@ const ARTISTS = ["AGENT BUGS", "GROOVIER", "SARTDAWG", "SHANTAM", "TBC BOMBAY", 
 const STOPS = [
   {
     num: "01", slug: "ccdxsocial-01", city: "BANGALORE", venue: "Social, Indiranagar",
-    date: "Mon, 29 Jun 2026 · 1 AM till late", tagline: "The first show · where it all begins",
+    date: "Mon, 29 Jun 2026 · 4 PM till late", tagline: "The first show · where it all begins",
     desc: "Home crowd, first floor. Outdoor afternoon from 4 PM with a vendor market and the pack together for the first time. Dogs and cats welcome. Music from 4:30 through to close.",
     lineup: "Agent Bugs · Groovier · Sartdawg · Shantam", bg: "bg-electric-blue", text: "text-cream", accent: "text-acid-yellow",
     badge: "next" as const, poster: BLR_POSTER,
@@ -212,7 +212,7 @@ export default function CcdxSocialSeries() {
                         </div>
                       ))}
                     </div>
-                    <div className="font-display text-[10px] mt-2 text-cream/70">MON 29 JUN · SOCIAL INDIRANAGAR · 1 AM</div>
+                    <div className="font-display text-[10px] mt-2 text-cream/70">MON 29 JUN · SOCIAL INDIRANAGAR · 4 PM</div>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">

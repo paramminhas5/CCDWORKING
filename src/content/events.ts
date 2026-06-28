@@ -182,7 +182,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
       { icon: "🐾", label: "PETS",   desc: "Dogs and cats welcome all afternoon. Come with the pack." },
     ],
 
-    doors_time: "1 AM",
+    doors_time: "4 PM",
     peak_time:  "9 PM — close",
 
     schedule: [

@@ -43,7 +43,7 @@ function useNextEvent() {
   useEffect(() => {
     const d = parseEventDate("Mon, Jun 29, 2026");
     if (d) {
-      d.setHours(1, 0, 0, 0); // 1 AM IST
+      d.setHours(16, 0, 0, 0); // 4 PM IST
       const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
       if (diff >= 0 && diff <= 60) setDaysAway(diff);
     }

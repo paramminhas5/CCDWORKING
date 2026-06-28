@@ -9,8 +9,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/compat-router";
 
-// Jun 29 2026 01:00 IST = Jun 28 19:30 UTC
-const NEXT_SHOW_DATE = new Date("2026-06-28T19:30:00Z");
+// Jun 29 2026 16:00 IST = 10:30 UTC
+const NEXT_SHOW_DATE = new Date("2026-06-29T10:30:00Z");
 
 const SHOWS = [
   {
