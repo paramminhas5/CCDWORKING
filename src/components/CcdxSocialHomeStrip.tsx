@@ -9,14 +9,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/compat-router";
 
-// Jun 26 2026 16:00 IST = 10:30 UTC
-const NEXT_SHOW_DATE = new Date("2026-06-26T10:30:00Z");
+// Jun 29 2026 01:00 IST = Jun 28 19:30 UTC
+const NEXT_SHOW_DATE = new Date("2026-06-28T19:30:00Z");
 
 const SHOWS = [
   {
     num: "01",
     name: "CCDXSOCIAL 01",
-    date: "Fri 26 Jun",
+    date: "Mon 29 Jun",
     venue: "Indiranagar Social",
     slug: "ccdxsocial-01",
     bg: "bg-electric-blue",
@@ -138,7 +138,7 @@ const CcdxSocialHomeStrip = () => {
                 ))}
               </div>
               <p className="font-display text-ink text-xs mt-3 opacity-70">
-                FRI 26 JUN · INDIRANAGAR SOCIAL
+                MON 29 JUN · INDIRANAGAR SOCIAL
               </p>
               <Link
                 to="/events/ccdxsocial-01"
@@ -183,7 +183,7 @@ const CcdxSocialHomeStrip = () => {
                 {/* Status chip */}
                 {s.isNext && (
                   <span className="absolute -top-[14px] left-4 bg-acid-yellow text-ink font-display text-[9px] uppercase tracking-widest px-2.5 py-1 border-2 border-ink">
-                    ▶ NEXT UP · 26 JUN
+                    ▶ NEXT UP · 29 JUN
                   </span>
                 )}
                 {s.isMega && (

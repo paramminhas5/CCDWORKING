@@ -4,7 +4,7 @@
  * Two halves:
  *
  * CCD × SOCIAL — Season 1 show structure:
- *   Show 01 · 26 Jun 2026 → BANGALORE   (broad, welcoming, first impression)
+ *   Show 01 · 29 Jun 2026 → BANGALORE   (broad, welcoming, first impression)
  *   Show 02 · Jul 2026    → BOMBAY      (style, midsummer energy)
  *   Show 03 · Aug 2026    → HYDERABAD   (the third chapter)
  *   Show 04 · Oct 2026    → DELHI       (fourth and largest show)
@@ -63,7 +63,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-01": {
     slug: "ccdxsocial-01",
     title: "BANGALORE",
-    date: "Fri, Jun 26, 2026",
+    date: "Mon, Jun 29, 2026",
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
@@ -182,7 +182,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
       { icon: "🐾", label: "PETS",   desc: "Dogs and cats welcome all afternoon. Come with the pack." },
     ],
 
-    doors_time: "4 PM",
+    doors_time: "1 AM",
     peak_time:  "9 PM — close",
 
     schedule: [
@@ -240,7 +240,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "BANGALORE · 26 JUN",
+      "BANGALORE · 29 JUN",
       "INDIRANAGAR SOCIAL",
       "AGENT BUGS · GROOVIER · SARTDAWG · SHANTAM",
       "DOORS 4 PM",
