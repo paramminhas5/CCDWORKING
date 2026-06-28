@@ -4,7 +4,7 @@
  * Sections:
  *   Nav → Hero → Identity strip → About → Early Access →
  *   HomepageEvents (single unified section) →
- *   Videos → Playlist → Drops → Contact → Footer
+ *   Videos → Playlist → Drops → Instagram → Contact → Footer
  *
  * Performance: Hero + Nav load eagerly (above-the-fold).
  * Everything below the fold is lazy-loaded to reduce initial JS bundle.
@@ -29,6 +29,7 @@ const Playlist = lazy(() => import("@/components/Playlist"));
 const Drops = lazy(() => import("@/components/Drops"));
 const Videos = lazy(() => import("@/components/Videos"));
 const EarlyAccess = lazy(() => import("@/components/EarlyAccess"));
+const Instagram = dynamic(() => import("@/components/Instagram"), { ssr: false });
 
 const SectionFallback = ({ bg = "bg-cream" }: { bg?: string }) => (
   <div className={`${bg} border-b-4 border-ink min-h-[220px] animate-pulse`} aria-hidden />
@@ -98,6 +99,9 @@ const Index = () => {
         <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
           <SectionReveal><EarlyAccess /></SectionReveal>
         </Suspense>
+
+        <MarqueeBySlot id="above-instagram" />
+        <SectionReveal><Instagram /></SectionReveal>
 
         <Contact />
         <Footer />
