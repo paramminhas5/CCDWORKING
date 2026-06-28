@@ -63,7 +63,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-01": {
     slug: "ccdxsocial-01",
     title: "BANGALORE",
-    date: "Sun, Jun 29, 2026",
+    date: "Sun, Jun 28, 2026",
     city: "Bangalore",
     venue: "Indiranagar Social",
     blurb:
@@ -174,7 +174,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     cta_label: "RSVP →",
 
     narrative:
-      "We're taking over the ground floor at Indiranagar Social on Sunday, June 29. Doors open at 4 PM — bring your dog, grab a drink, and ease into it. Open deck winners kick things off at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carries it all the way to close. Just RSVP so we have your name at the door.",
+      "We're taking over the ground floor at Indiranagar Social on Sunday, June 28. Doors open at 4 PM — bring your dog, grab a drink, and ease into it. Open deck winners kick things off at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carries it all the way to close. Just RSVP so we have your name at the door.",
 
     vibe_pillars: [
       { icon: "🎧", label: "MUSIC",  desc: "Open decks at 4:30, then Agent Bugs, Groovier, Sartdawg, and Shantam carrying the night through to close." },
@@ -240,7 +240,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "BANGALORE · 29 JUN",
+      "BANGALORE · 28 JUN",
       "INDIRANAGAR SOCIAL",
       "AGENT BUGS · GROOVIER · SARTDAWG · SHANTAM",
       "DOORS 4 PM",
