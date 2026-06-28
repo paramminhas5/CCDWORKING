@@ -67,7 +67,7 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
       lineup:     staticRow.lineup     ?? event.lineup,
       blurb:      staticRow.blurb      ?? event.blurb,
       date:       staticRow.date       ?? event.date,
-      poster_url: event.poster_url     || staticRow.poster_url,
+      poster_url: staticRow.poster_url || event.poster_url,
     };
   }
 

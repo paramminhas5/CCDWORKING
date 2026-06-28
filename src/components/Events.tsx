@@ -12,6 +12,7 @@ import { Link } from "@/lib/compat-router";
 import { supabase } from "@/lib/supabase";
 import type { EventRow } from "@/types/events";
 import { getStaticEventRow } from "@/content/events";
+import { resolvePoster } from "@/lib/poster";
 
 // Static fallback — shown while DB loads or when Supabase is empty/unreachable
 const STATIC_FALLBACK: EventRow[] = [
@@ -20,20 +21,6 @@ const STATIC_FALLBACK: EventRow[] = [
   getStaticEventRow("ccdxsocial-03")!,
   getStaticEventRow("ccdxsocial-mega")!,
 ].filter(Boolean);
-
-const resolvePosterUrl = (raw: string | null | undefined): string | null => {
-  if (!raw) return null;
-  const v = raw.trim();
-  if (!v) return null;
-  if (v.startsWith("http://") || v.startsWith("https://")) return v;
-  if (v.startsWith("/")) return v;
-  try {
-    const { data } = supabase.storage.from("posters").getPublicUrl(v);
-    return data?.publicUrl ?? `/${v}`;
-  } catch {
-    return `/${v}`;
-  }
-};
 
 const Events = () => {
   const [events, setEvents] = useState<EventRow[]>(STATIC_FALLBACK);
@@ -79,7 +66,7 @@ const Events = () => {
 
         {/* ── Featured next upcoming ── */}
         {nextUp && (() => {
-          const featuredPoster = resolvePosterUrl(nextUp.poster_url);
+          const featuredPoster = resolvePoster(nextUp.poster_url);
           return (
             <motion.article
               initial={{ opacity: 0, y: 60, rotate: -1 }}
@@ -207,7 +194,7 @@ const Events = () => {
 
 // ── Reusable Event Card ───────────────────────────────────────────────────────
 function EventCard({ event, isPast = false }: { event: EventRow; isPast?: boolean }) {
-  const src = resolvePosterUrl(event.poster_url);
+  const src = resolvePoster(event.poster_url);
   return (
     <Link
       to={`/events/${event.slug}`}
