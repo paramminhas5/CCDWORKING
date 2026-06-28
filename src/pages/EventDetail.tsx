@@ -38,6 +38,7 @@ import SeriesStrip from "@/components/SeriesStrip";
 import StickyRsvpBar from "@/components/StickyRsvpBar";
 
 import { imgUrl } from "@/lib/img";
+import { parseEventDate } from "@/lib/parse-date";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import {
