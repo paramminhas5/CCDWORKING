@@ -39,19 +39,10 @@ export default function Document() {
         <meta name="geo.position" content="12.9716;77.5946" />
         <meta name="ICBM" content="12.9716, 77.5946" />
 
-        {/* Default Open Graph (page-specific overridden via next/head) */}
+        {/* Default Open Graph and Twitter tags are set per-page via the SEO component.
+            Only site-level defaults that every page shares live here. */}
         <meta property="og:site_name" content="Cats Can Dance" />
         <meta property="og:locale" content="en_IN" />
-        <meta property="og:image" content="https://catscandance.com/og-image.jpg?v=2" />
-        <meta property="og:image:type" content="image/jpeg" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="Cats Can Dance — Bangalore underground crew. Parties, drops, culture." />
-
-        {/* Default Twitter */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:site" content="@catscandance" />
-        <meta name="twitter:image" content="https://catscandance.com/og-image.jpg?v=2" />
 
         {/* Fonts — loaded non-blocking via preload + swap pattern.
             The rel="preload" fetches the CSS early without blocking render.

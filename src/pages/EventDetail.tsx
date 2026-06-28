@@ -38,6 +38,7 @@ import SeriesStrip from "@/components/SeriesStrip";
 import StickyRsvpBar from "@/components/StickyRsvpBar";
 
 import { imgUrl } from "@/lib/img";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import {
   getEventContent,
@@ -54,6 +55,8 @@ function resolvePoster(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
+  // Skip dead Lovable CDN URLs — they 404 on catscandance.com
+  if (v.includes("/__l5e/")) return null;
   if (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/")) return v;
   try {
     const { data } = supabase.storage.from("posters").getPublicUrl(v);
@@ -90,6 +93,7 @@ interface EventDetailProps {
 const EventDetail = ({ event, slug }: EventDetailProps) => {
   const [open, setOpen] = useState(false);
   const [lightbox, setLightbox] = useState<MediaItem | null>(null);
+  const [posterError, setPosterError] = useState(false);
   const router = useRouter();
 
   // Auto-open RSVP dialog when arriving via ?rsvp=1 (e.g. from CcdxSocial page)
@@ -150,14 +154,32 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
   })();
   const ctaLabel = content.cta_label ?? "RSVP NOW →";
   const stickyMeta = `${event.date} · ${content.price_text ?? "Free RSVP"}`;
+  const resolvedPoster = resolvePoster(event.poster_url);
 
   // ─── JSON-LD ───
+  // Build an ISO 8601 startDate from the human-readable event.date + doors_time
+  // e.g. "Sun, Jun 28, 2026" + "4 PM" → "2026-06-28T16:00:00+05:30"
+  const isoStartDate = (() => {
+    const d = parseEventDate(event.date);
+    if (!d) return event.date;
+    const timeMatch = (content.doors_time ?? "").match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1]);
+      const m = parseInt(timeMatch[2] ?? "0");
+      if (timeMatch[3].toUpperCase() === "PM" && h < 12) h += 12;
+      if (timeMatch[3].toUpperCase() === "AM" && h === 12) h = 0;
+      d.setHours(h, m, 0, 0);
+    }
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00+05:30`;
+  })();
+
   const eventLd = {
     "@context": "https://schema.org",
     "@type": "MusicEvent",
     name: `Cats Can Dance — ${event.title}`,
     description: event.blurb,
-    startDate: event.date,
+    startDate: isoStartDate,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
@@ -170,7 +192,6 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
         addressCountry: "IN",
       },
     },
-    image: event.poster_url ? [event.poster_url] : undefined,
     performer: (event.lineup ?? [])
       .filter((p) => p.toUpperCase() !== "TBA")
       .map((p) => ({ "@type": "PerformingGroup", name: p })),
@@ -192,7 +213,6 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
         title={`${event.title} — Cats Can Dance${event.series_label ? ` · ${event.series_label}` : ""}`}
         description={event.blurb}
         path={`/events/${slug}`}
-        image={event.poster_url ?? undefined}
         type="event"
         jsonLd={[eventLd]}
       />
@@ -279,21 +299,18 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
 
               {/* Poster */}
               <div className="lg:max-w-md w-full justify-self-end">
-                {resolvePoster(event.poster_url) ? (
-                  <img
-                    src={resolvePoster(event.poster_url)!}
-                    alt={`${event.title} poster`}
-                    loading="eager"
-                    className="w-full aspect-[3/4] object-cover border-4 border-ink chunk-shadow-lg"
-                    onError={(ev) => {
-                      const img = ev.currentTarget;
-                      if (slug.includes("episode-1")) {
-                        img.src = imgUrl(episode1Poster);
-                      } else {
-                        img.style.display = "none";
-                      }
-                    }}
-                  />
+                {resolvedPoster && !posterError ? (
+                  <div className="relative aspect-[3/4] border-4 border-ink chunk-shadow-lg overflow-hidden">
+                    <Image
+                      src={resolvedPoster}
+                      alt={`${event.title} poster`}
+                      fill
+                      priority
+                      sizes="(max-width: 1024px) 100vw, 400px"
+                      className="object-cover"
+                      onError={() => setPosterError(true)}
+                    />
+                  </div>
                 ) : (
                   <EventPosterPlaceholder
                     title={event.title}

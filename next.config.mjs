@@ -28,6 +28,7 @@ const nextConfig = {
   images: {
     // Serve modern formats (avif/webp) for faster image loading
     formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },
       { protocol: "https", hostname: "cdn.shopify.com" },
@@ -35,6 +36,10 @@ const nextConfig = {
       { protocol: "https", hostname: "img.youtube.com" },
       { protocol: "https", hostname: "catscandance.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
+      // Behold.so CDN — Instagram feed images
+      { protocol: "https", hostname: "pictures.behold.so" },
+      { protocol: "https", hostname: "**.behold.so" },
+      // Catch-all for any other HTTPS image sources
       { protocol: "https", hostname: "**" },
     ],
   },

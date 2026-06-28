@@ -7,6 +7,7 @@
  */
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Link } from "@/lib/compat-router";
 import { supabase } from "@/lib/supabase";
 import type { EventRow } from "@/types/events";
@@ -24,6 +25,8 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
+  // Skip dead Lovable CDN URLs — they 404 on catscandance.com
+  if (v.includes("/__l5e/")) return null;
   if (v.startsWith("http://") || v.startsWith("https://")) return v;
   if (v.startsWith("/")) return v;
   try {
@@ -91,17 +94,14 @@ const Events = () => {
                 {featuredPoster && (
                   <div className="md:w-[40%] shrink-0">
                     <Link to={`/events/${nextUp.slug}`} className="block group">
-                      <div className="aspect-[3/4] bg-ink border-4 border-ink overflow-hidden chunk-shadow group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-transform">
-                        <img
+                      <div className="relative aspect-[3/4] bg-ink border-4 border-ink overflow-hidden chunk-shadow group-hover:translate-x-1 group-hover:translate-y-1 group-hover:shadow-none transition-transform">
+                        <Image
                           src={featuredPoster}
                           alt={`${nextUp.title} poster`}
-                          loading="lazy"
-                          decoding="async"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                          onError={(ev) => {
-                            (ev.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
+                          fill
+                          priority
+                          sizes="(max-width: 768px) 100vw, 40vw"
+                          className="object-cover"
                         />
                       </div>
                     </Link>
@@ -216,16 +216,12 @@ function EventCard({ event, isPast = false }: { event: EventRow; isPast?: boolea
     >
       <div className="relative aspect-video bg-ink border-b-4 border-ink overflow-hidden">
         {src ? (
-          <img
+          <Image
             src={src}
             alt={`${event.title} poster`}
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(ev) => {
-              (ev.currentTarget as HTMLImageElement).style.display = "none";
-            }}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full grid place-items-center bg-lime text-ink font-display text-2xl p-4 text-center">
