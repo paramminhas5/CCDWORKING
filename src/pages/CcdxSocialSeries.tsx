@@ -15,12 +15,13 @@ import catRaver from "@/assets/cat-raver.png";
 import { imgUrl } from "@/lib/img";
 
 // ── Asset URLs ────────────────────────────────────────────────────────────────
-// TODO: Upload posters to Supabase Storage ("posters" bucket) and replace nulls
-// with the public URLs: https://YOUR_PROJECT.supabase.co/storage/v1/object/public/posters/filename.jpg
-const HERO_ART: string | null = null;
-const BLR_POSTER: string | null = null;
-const MUM_POSTER: string | null = null;
-const HYD_POSTER: string | null = null;
+// These serve from public/posters/ — Netlify CDN, no Supabase required.
+// Drop the actual JPG files in public/posters/ to replace these.
+// See public/posters/README.md for the full list of expected filenames.
+const HERO_ART: string | null = null; // Upload to public/images/ccdxsocial-hero.jpg when ready
+const BLR_POSTER = "/posters/ccdxsocial-blr.jpg";
+const MUM_POSTER = "/posters/ccdxsocial-mum.jpg";
+const HYD_POSTER = "/posters/ccdxsocial-hyd.jpg";
 
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
