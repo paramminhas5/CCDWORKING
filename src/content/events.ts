@@ -83,7 +83,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-02": {
     slug: "ccdxsocial-02",
     title: "BOMBAY",
-    date: "Sun, Jul 26, 2026",
+    date: "July 2026",
     city: "Bombay",
     venue: "Social, Bombay (TBC)",
     blurb:
@@ -103,7 +103,7 @@ export const EVENT_ROWS: Record<string, EventRow> = {
   "ccdxsocial-03": {
     slug: "ccdxsocial-03",
     title: "HYDERABAD",
-    date: "Sun, Aug 30, 2026",
+    date: "August 2026",
     city: "Hyderabad",
     venue: "Social, Hyderabad (TBC)",
     blurb:
