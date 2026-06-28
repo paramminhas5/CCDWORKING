@@ -20,18 +20,11 @@ const absolute = (img: string) =>
 
 /**
  * Decide the best OG image to use.
- * - If a custom image is provided AND it looks like a working landscape image, use it.
- * - Otherwise fall back to the default site-wide OG (1200×630 landscape).
- *
- * We skip Lovable CDN URLs (/__l5e/) — they no longer resolve on catscandance.com.
- * We skip portrait poster URLs (aspect ~3:4) because most social crawlers expect
- * a landscape image and will either reject or badly crop a portrait one.
+ * Falls back to the default 1200×630 landscape OG image if no valid URL is provided.
  */
 const resolveOgImage = (image?: string): string => {
   if (!image) return DEFAULT_OG;
   const abs = absolute(image);
-  // Skip broken Lovable CDN URLs
-  if (abs.includes("/__l5e/")) return DEFAULT_OG;
   return abs;
 };
 

@@ -55,8 +55,6 @@ function resolvePoster(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
-  // Skip dead Lovable CDN URLs — they 404 on catscandance.com
-  if (v.includes("/__l5e/")) return null;
   if (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/")) return v;
   try {
     const { data } = supabase.storage.from("posters").getPublicUrl(v);
@@ -180,8 +178,12 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
     name: `Cats Can Dance — ${event.title}`,
     description: event.blurb,
     startDate: isoStartDate,
+    doorTime: isoStartDate,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    image: "https://catscandance.com/og-image.jpg",
+    isAccessibleForFree: true,
+    typicalAgeRange: "18+",
     location: {
       "@type": "Place",
       name: event.venue,
@@ -191,11 +193,23 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
         addressRegion: "Karnataka",
         addressCountry: "IN",
       },
+      ...(content.venue_geo ? {
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: content.venue_geo.lat,
+          longitude: content.venue_geo.lng,
+        },
+      } : {}),
     },
     performer: (event.lineup ?? [])
       .filter((p) => p.toUpperCase() !== "TBA")
       .map((p) => ({ "@type": "PerformingGroup", name: p })),
-    organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
+    organizer: {
+      "@type": "Organization",
+      name: "Cats Can Dance",
+      url: "https://catscandance.com",
+      logo: "https://catscandance.com/ccd-logo.png",
+    },
     offers: {
       "@type": "Offer",
       url: `https://catscandance.com/events/${slug}`,
@@ -203,6 +217,16 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
       priceCurrency: "INR",
       availability: "https://schema.org/InStock",
     },
+  };
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com" },
+      { "@type": "ListItem", position: 2, name: "Events", item: "https://catscandance.com/events" },
+      { "@type": "ListItem", position: 3, name: event.title, item: `https://catscandance.com/events/${slug}` },
+    ],
   };
 
   // ──────────────────── render ────────────────────
@@ -214,7 +238,7 @@ const EventDetail = ({ event, slug }: EventDetailProps) => {
         description={event.blurb}
         path={`/events/${slug}`}
         type="event"
-        jsonLd={[eventLd]}
+        jsonLd={[eventLd, breadcrumbLd]}
       />
 
       <main className="bg-background text-foreground min-h-screen pb-20 md:pb-0">

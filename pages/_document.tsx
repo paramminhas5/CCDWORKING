@@ -70,6 +70,8 @@ export default function Document() {
         </noscript>
         <link rel="preconnect" href="https://i.ytimg.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="//cdn.shopify.com" />
+        <link rel="dns-prefetch" href="//supabase.co" />
+        <link rel="dns-prefetch" href="//pictures.behold.so" />
 
         {/* Structured Data */}
         <script
@@ -84,6 +86,7 @@ export default function Document() {
               "logo": "https://catscandance.com/ccd-logo.png",
               "image": "https://catscandance.com/og-image.jpg",
               "description": "Cats Can Dance is a Bangalore, India brand running underground dance music Episodes and a streetwear label.",
+              "foundingDate": "2024",
               "address": {
                 "@type": "PostalAddress",
                 "addressLocality": "Bangalore",
@@ -93,6 +96,9 @@ export default function Document() {
               "geo": { "@type": "GeoCoordinates", "latitude": 12.9716, "longitude": 77.5946 },
               "areaServed": [
                 { "@type": "City", "name": "Bangalore" },
+                { "@type": "City", "name": "Mumbai" },
+                { "@type": "City", "name": "Hyderabad" },
+                { "@type": "City", "name": "Delhi" },
                 { "@type": "Country", "name": "India" }
               ],
               "sameAs": [
@@ -117,6 +123,14 @@ export default function Document() {
               "name": "Cats Can Dance",
               "url": "https://catscandance.com",
               "inLanguage": "en-IN",
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": {
+                  "@type": "EntryPoint",
+                  "urlTemplate": "https://catscandance.com/events?q={search_term_string}"
+                },
+                "query-input": "required name=search_term_string"
+              }
             }),
           }}
         />
