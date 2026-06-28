@@ -262,6 +262,12 @@ function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
       toast.error(error.message);
     } else {
       toast.success(`Event "${form.title}" created!`);
+      // Revalidate the new event page + listing so poster shows immediately
+      const slug = form.slug.trim();
+      await Promise.allSettled([
+        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: `/events/${slug}` }) }),
+        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: "/events" }) }),
+      ]);
       setForm(EMPTY_EVENT_FORM);
       setExpanded(false);
       onSuccess();
@@ -795,6 +801,11 @@ function EditEventDialog({
       toast.error(error.message);
     } else {
       toast.success(`"${form.title}" updated!`);
+      // Revalidate the event page + listing so poster shows immediately
+      await Promise.allSettled([
+        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: `/events/${event.slug}` }) }),
+        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: "/events" }) }),
+      ]);
       onSaved();
       onClose();
     }
