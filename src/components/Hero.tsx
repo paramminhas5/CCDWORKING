@@ -34,17 +34,18 @@ function useIsMobile() {
 function useNextEvent() {
   const [next] = useState<{ title: string; date: string; venue: string; slug: string } | null>({
     title: "BANGALORE — CCD × SOCIAL",
-    date: "Sun, Jun 29, 2026",
+    date: "Fri, Jun 26, 2026",
     venue: "Social, Indiranagar",
     slug: "ccdxsocial-01",
   });
   const [daysAway, setDaysAway] = useState<number | null>(null);
 
   useEffect(() => {
-    const d = parseEventDate("Sun, Jun 29, 2026");
+    const d = parseEventDate("Fri, Jun 26, 2026");
     if (d) {
+      d.setHours(16, 0, 0, 0); // 4 PM
       const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
-      if (diff > 0 && diff <= 60) setDaysAway(diff);
+      if (diff >= 0 && diff <= 60) setDaysAway(diff);
     }
   }, []);
 

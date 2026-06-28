@@ -42,6 +42,20 @@ const EventCountdown = ({ date, doorsTime, invert = false }: Props) => {
   const target = parseEventDate(date);
   if (!target) return null;
 
+  // If doorsTime is given (e.g. "4 PM", "4:30 PM") set the countdown to that
+  // hour on the event day rather than midnight so it counts to the actual start.
+  if (doorsTime) {
+    const clean = doorsTime.trim().toUpperCase();
+    const m = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+    if (m) {
+      let h = parseInt(m[1]);
+      const mins = parseInt(m[2] ?? "0");
+      if (m[3] === "PM" && h < 12) h += 12;
+      if (m[3] === "AM" && h === 12) h = 0;
+      target.setHours(h, mins, 0, 0);
+    }
+  }
+
   const diff = target.getTime() - now;
   if (diff < 60_000) return null; // < 1 minute — hide; status pill takes over
 
