@@ -79,14 +79,14 @@ const STOPS = [
   },
   {
     num: "02", slug: "ccdxsocial-02", city: "BOMBAY", venue: "Social, Bombay (TBC)",
-    date: "Sun, 26 Jul 2026 · 4 PM till late", tagline: "The second show · Bombay energy",
+    date: "July 2026", tagline: "The second show · Bombay energy",
     desc: "Bombay brings its own thing. Same easy format — outdoor afternoon, dogs and cats welcome, the floor opens after dark.",
     lineup: "Lineup TBA", bg: "bg-magenta", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: null, posterFallback: MUM_POSTER_CDN,
   },
   {
     num: "03", slug: "ccdxsocial-03", city: "HYDERABAD", venue: "Social, Hyderabad (TBC)",
-    date: "Sun, 30 Aug 2026 · 4 PM till late", tagline: "The third show · Hyderabad",
+    date: "August 2026", tagline: "The third show · Hyderabad",
     desc: "The series hits Hyderabad. Outdoor afternoon, pets welcome, real music. The underground takes the late slot.",
     lineup: "Lineup TBA", bg: "bg-ink", text: "text-cream", accent: "text-acid-yellow",
     badge: null, poster: null, posterFallback: HYD_POSTER_CDN,
@@ -266,7 +266,7 @@ export default function CcdxSocialSeries() {
 
 
         {/* ── MARQUEE ── */}
-        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 29 JUN", "BOMBAY 26 JUL", "HYDERABAD 30 AUG", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
+        <Marquee bg="bg-acid-yellow" items={["CCD × SOCIAL", "BANGALORE 29 JUN", "BOMBAY JULY", "HYDERABAD AUGUST", "DELHI OCTOBER", "FREE ENTRY · RSVP"]} />
 
         {/* ── HOW IT WORKS ── */}
         <section className="bg-cream py-12 md:py-16 border-b-4 border-ink relative overflow-hidden">
