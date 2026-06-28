@@ -15,22 +15,52 @@ type Props = {
 const SITE = "https://catscandance.com";
 const DEFAULT_OG = `${SITE}/og-image.jpg?v=2`;
 
-const absolute = (img: string) => (img.startsWith("http") ? img : `${SITE}${img.startsWith("/") ? "" : "/"}${img}`);
+const absolute = (img: string) =>
+  img.startsWith("http") ? img : `${SITE}${img.startsWith("/") ? "" : "/"}${img}`;
 
-const SEO = ({ title, description, path = "/", image, imageAlt, jsonLd, type = "website", keywords, noindex }: Props) => {
+/**
+ * Decide the best OG image to use.
+ * - If a custom image is provided AND it looks like a working landscape image, use it.
+ * - Otherwise fall back to the default site-wide OG (1200×630 landscape).
+ *
+ * We skip Lovable CDN URLs (/__l5e/) — they no longer resolve on catscandance.com.
+ * We skip portrait poster URLs (aspect ~3:4) because most social crawlers expect
+ * a landscape image and will either reject or badly crop a portrait one.
+ */
+const resolveOgImage = (image?: string): string => {
+  if (!image) return DEFAULT_OG;
+  const abs = absolute(image);
+  // Skip broken Lovable CDN URLs
+  if (abs.includes("/__l5e/")) return DEFAULT_OG;
+  return abs;
+};
+
+const SEO = ({
+  title,
+  description,
+  path = "/",
+  image,
+  imageAlt,
+  jsonLd,
+  type = "website",
+  keywords,
+  noindex,
+}: Props) => {
   const url = `${SITE}${path}`;
-  const og = image ? absolute(image) : DEFAULT_OG;
+  const og = resolveOgImage(image);
   const isJpg = /\.jpe?g(\?|$)/i.test(og);
   const ogType = isJpg ? "image/jpeg" : "image/png";
   const alt = imageAlt ?? title;
   const ldArray = Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [];
+
   return (
     <Head>
-      <title>{title}</title>
-      <meta name="description" content={description} />
-      {keywords && <meta name="keywords" content={keywords} />}
-      <meta name="author" content="Cats Can Dance" />
+      <title key="title">{title}</title>
+      <meta key="description" name="description" content={description} />
+      {keywords && <meta key="keywords" name="keywords" content={keywords} />}
+      <meta key="author" name="author" content="Cats Can Dance" />
       <meta
+        key="robots"
         name="robots"
         content={
           noindex
@@ -38,36 +68,36 @@ const SEO = ({ title, description, path = "/", image, imageAlt, jsonLd, type = "
             : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
         }
       />
-      <meta name="theme-color" content="#ff2bd6" media="(prefers-color-scheme: light)" />
-      <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
-      <link rel="canonical" href={url} />
-      <link rel="alternate" hrefLang="x-default" href={url} />
+      <meta key="theme-color-light" name="theme-color" content="#ff2bd6" media="(prefers-color-scheme: light)" />
+      <meta key="theme-color-dark" name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
+      <link key="canonical" rel="canonical" href={url} />
+      <link key="alternate-default" rel="alternate" hrefLang="x-default" href={url} />
 
       {/* Open Graph */}
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
-      <meta property="og:url" content={url} />
-      <meta property="og:type" content={type === "article" ? "article" : "website"} />
-      <meta property="og:site_name" content="Cats Can Dance" />
-      <meta property="og:locale" content="en_IN" />
-      <meta property="og:image" content={og} />
-      <meta property="og:image:secure_url" content={og} />
-      <meta property="og:image:type" content={ogType} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={alt} />
+      <meta key="og:title" property="og:title" content={title} />
+      <meta key="og:description" property="og:description" content={description} />
+      <meta key="og:url" property="og:url" content={url} />
+      <meta key="og:type" property="og:type" content={type === "article" ? "article" : "website"} />
+      <meta key="og:site_name" property="og:site_name" content="Cats Can Dance" />
+      <meta key="og:locale" property="og:locale" content="en_IN" />
+      <meta key="og:image" property="og:image" content={og} />
+      <meta key="og:image:secure_url" property="og:image:secure_url" content={og} />
+      <meta key="og:image:type" property="og:image:type" content={ogType} />
+      <meta key="og:image:width" property="og:image:width" content="1200" />
+      <meta key="og:image:height" property="og:image:height" content="630" />
+      <meta key="og:image:alt" property="og:image:alt" content={alt} />
 
       {/* Twitter */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content="@catscandance" />
-      <meta name="twitter:creator" content="@catscandance" />
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={og} />
-      <meta name="twitter:image:alt" content={alt} />
+      <meta key="twitter:card" name="twitter:card" content="summary_large_image" />
+      <meta key="twitter:site" name="twitter:site" content="@catscan.dance" />
+      <meta key="twitter:creator" name="twitter:creator" content="@catscan.dance" />
+      <meta key="twitter:title" name="twitter:title" content={title} />
+      <meta key="twitter:description" name="twitter:description" content={description} />
+      <meta key="twitter:image" name="twitter:image" content={og} />
+      <meta key="twitter:image:alt" name="twitter:image:alt" content={alt} />
 
       {ldArray.map((obj, i) => (
-        <script key={i} type="application/ld+json">
+        <script key={`ld-${i}`} type="application/ld+json">
           {JSON.stringify(obj)}
         </script>
       ))}

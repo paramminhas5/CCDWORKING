@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { Link } from "@/lib/compat-router";
 import { parseEventDate } from "@/lib/parse-date";
 import { supabase } from "@/lib/supabase";
@@ -40,6 +41,8 @@ function resolvePoster(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (!v) return null;
+  // Skip dead Lovable CDN URLs — they 404 on catscandance.com
+  if (v.includes("/__l5e/")) return null;
   if (v.startsWith("http") || v.startsWith("/")) return v;
   try {
     const { data } = supabase.storage.from("posters").getPublicUrl(v);
@@ -318,13 +321,14 @@ const Events = () => {
                 <div className={`grid ${poster ? "md:grid-cols-[0.85fr_1.15fr]" : ""}`}>
                   {/* Poster */}
                   {poster ? (
-                    <div className="relative bg-ink border-b-4 md:border-b-0 md:border-r-4 border-ink overflow-hidden min-h-[280px]">
-                      <img
+                    <div className="relative aspect-[3/4] md:aspect-auto md:min-h-[460px] bg-ink border-b-4 md:border-b-0 md:border-r-4 border-ink overflow-hidden">
+                      <Image
                         src={poster}
                         alt={`${nextEvent.title} poster`}
-                        loading="eager"
-                        className="w-full h-full object-cover aspect-[3/4] md:aspect-auto"
-                        onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                        fill
+                        priority
+                        sizes="(max-width: 768px) 100vw, 45vw"
+                        className="object-cover"
                       />
                     </div>
                   ) : (
@@ -456,12 +460,12 @@ const Events = () => {
                       >
                         <div className="relative bg-ink border-b-4 border-ink aspect-video overflow-hidden">
                           {src ? (
-                            <img
+                            <Image
                               src={src}
                               alt={`${e.title} poster`}
-                              loading="lazy"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              fill
+                              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                              className="object-cover group-hover:scale-105 transition-transform duration-500"
                             />
                           ) : (
                             <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-2xl p-4 text-center">
