@@ -20,6 +20,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (status)     filters["status"]     = `eq.${status}`;
   if (event_type) filters["event_type"] = `eq.${event_type}`;
 
-  const rows = await get("events", pq(filters));
-  return res.json(rows ?? []);
+  const rows = ((await get("events", pq(filters))) ?? []) as Array<Record<string, any>>;
+
+  // An event marked "upcoming" whose date has passed is not upcoming any more.
+  // Dates are stored as display text (e.g. "Sun, Jun 28, 2026"); keep rows we
+  // can't parse rather than hide them.
+  if (status === "upcoming") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const stillUpcoming = rows.filter((r) => {
+      const t = Date.parse(String(r.date ?? "").replace(/^[A-Za-z]{3},\s*/, ""));
+      return Number.isNaN(t) || t >= today.getTime();
+    });
+    return res.json(stillUpcoming);
+  }
+  return res.json(rows);
 }
