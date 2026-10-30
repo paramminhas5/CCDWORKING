@@ -1,3 +1,7 @@
+// CCD.SCHOOL lives in its own app (repo: paramminhas5/Ableton-Final-Next).
+// Switch this to https://learn.catscandance.com once that DNS record is live.
+const SCHOOL_URL = process.env.NEXT_PUBLIC_SCHOOL_URL || "https://ableton-final-next-ccd-school.vercel.app";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -40,6 +44,12 @@ const nextConfig = {
       // Fallback for dev/preview — remove before final prod hardening
       { protocol: "https", hostname: "**" },
     ],
+  },
+  async redirects() {
+    return [
+      { source: "/school", destination: SCHOOL_URL, permanent: false },
+      { source: "/school/:path*", destination: `${SCHOOL_URL}/:path*`, permanent: false },
+    ];
   },
   async headers() {
     if (process.env.NODE_ENV === "production") return [];

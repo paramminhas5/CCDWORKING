@@ -17,6 +17,7 @@ const primaryLinks = [
   { to: "/ccdxsocial", label: "Series" },
   { to: "/artists",  label: "Artists"  },
   { to: "/shop",     label: "Shop"     },
+  { to: "/school",   label: "School"   },
 ];
 
 const partnersLinks = [

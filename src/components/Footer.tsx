@@ -13,6 +13,7 @@ const groups = [
       { to: "/discover", label: "Discover" },
       { to: "/events", label: "Events" },
       { to: "/shop", label: "Shop" },
+      { to: "/school", label: "CCD.SCHOOL" },
     ],
   },
   {
