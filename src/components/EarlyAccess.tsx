@@ -5,7 +5,7 @@ import { z } from "zod";
 import note from "@/assets/music-note.png";
 import { imgUrl } from "@/lib/img";
 import Confetti from "@/components/Confetti";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-shim";
 import { useSignupCount } from "@/hooks/useSocialProof";
 
 const EmailSchema = z.string().trim().toLowerCase().email().max(255);
@@ -38,15 +38,15 @@ const EarlyAccess = () => {
     }
     setBusy(true);
     try {
-      const { error } = await supabase.from("early_access_signups").insert({
-        email: parsed.data,
-        source: "home",
+      const res = await fetch("/api/early-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: parsed.data, source: "home", website }),
       });
-      // Duplicate email (unique constraint) is not an error for the user
-      if (error && error.code === "23505") {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 409) throw new Error(data?.error ?? "Failed");
+      if (data?.duplicate || res.status === 409) {
         toast("You're already on the list. See you soon. 🐾");
-      } else if (error) {
-        throw new Error(error.message);
       } else {
         toast.success("You're in! Welcome to the litter. Check your inbox.");
       }

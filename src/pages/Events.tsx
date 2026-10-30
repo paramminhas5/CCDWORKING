@@ -13,12 +13,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { Link } from "@/lib/compat-router";
 import { parseEventDate } from "@/lib/parse-date";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-shim";
 import { getEventContent, EVENT_ROWS } from "@/content/events";
-import { resolvePoster } from "@/lib/poster";
 import type { EventRow } from "@/types/events";
 
 import Nav from "@/components/Nav";
@@ -27,7 +25,10 @@ import SEO from "@/components/SEO";
 import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Marquee from "@/components/Marquee";
+import RsvpDialog from "@/components/RsvpDialog";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
+import SeriesStrip from "@/components/SeriesStrip";
+import SafeCuratedEvents from "@/components/SafeCuratedEvents";
 
 // ── static fallback — always present, no DB needed ──────────────────────────
 const STATIC_ROWS: EventRow[] = Object.values(EVENT_ROWS).sort(
@@ -36,6 +37,20 @@ const STATIC_ROWS: EventRow[] = Object.values(EVENT_ROWS).sort(
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const Pad = (n: number) => String(n).padStart(2, "0");
+
+
+function resolvePoster(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.startsWith("http") || v.startsWith("/")) return v;
+  try {
+    const { data } = supabase.storage.from("event-posters").getPublicUrl(v);
+    return data?.publicUrl ?? `/${v}`;
+  } catch {
+    return `/${v}`;
+  }
+}
 
 // ── countdown hook (SSR-safe, no hydration mismatch) ────────────────────────
 function useCountdown(target: Date | null) {
@@ -62,21 +77,10 @@ function useCountdown(target: Date | null) {
 }
 
 
-// Map old Supabase titles to city display names — guards against stale DB data
-const TITLE_MAP: Record<string, string> = {
-  "ccdxsocial 01": "BANGALORE",
-  "ccdxsocial 02": "BOMBAY",
-  "ccdxsocial 03": "HYDERABAD",
-  "mega":          "DELHI",
-};
-const displayTitle = (t: string) => TITLE_MAP[t.toLowerCase()] ?? t.toUpperCase();
-
 // ── main component ───────────────────────────────────────────────────────────
-type FilterTab = "all" | "upcoming" | "past" | "series";
-
 const Events = () => {
   const [all, setAll] = useState<EventRow[]>(STATIC_ROWS);
-  const [filter, setFilter] = useState<FilterTab>("all");
+  const [rsvpOpen, setRsvpOpen] = useState(false);
 
   // Attempt DB hydration — fall back silently to static data
   useEffect(() => {
@@ -88,14 +92,7 @@ const Events = () => {
           .select("*")
           .order("sort_order", { ascending: true });
         if (!cancelled && Array.isArray(data) && data.length > 0) {
-          // Prefer the curated local poster path from the static catalogue over
-          // whatever is stored in Supabase (which may be null or a stale storage
-          // URL). Mirrors the same merge already done in [slug].tsx getStaticProps.
-          const merged = (data as unknown as EventRow[]).map((row) => ({
-            ...row,
-            poster_url: EVENT_ROWS[row.slug]?.poster_url || row.poster_url || null,
-          }));
-          setAll(merged);
+          setAll(data as unknown as EventRow[]);
         }
       } catch {
         // stay on static fallback
@@ -117,16 +114,6 @@ const Events = () => {
          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     [safeAll],
   );
-
-  // Filtered events for the grid section
-  const filteredEvents = useMemo(() => {
-    switch (filter) {
-      case "upcoming": return upcoming;
-      case "past": return past;
-      case "series": return seriesEvents;
-      default: return safeAll;
-    }
-  }, [filter, safeAll, upcoming, past, seriesEvents]);
 
   // Countdown target from next event date
   const countdownTarget = useMemo(() => {
@@ -168,18 +155,18 @@ const Events = () => {
         {/* ── 1. HERO ── */}
         <PageHero
           eyebrow="EVENTS"
-          title="THE EVENTS."
+          title="NIGHTS THAT MOVE."
           bg="bg-magenta"
           textColor="text-cream"
           eyebrowColor="text-acid-yellow"
           shadowColor="hsl(var(--ink))"
         >
           <p className="text-cream/90 font-display text-2xl md:text-3xl mb-2">
-            UNDERGROUND. CURATED. OURS.
+            UNDERGROUND. LOUD. OURS.
           </p>
           <p className="text-cream/80 font-medium text-lg max-w-xl">
-            The best electronic music nights in India — house, disco, garage, jungle, D&amp;B.
-            Every event handpicked. Free RSVP. Pets welcome at the CCD × Social series.
+            The cult underground series — house, disco, garage, jungle &amp; D&amp;B.
+            Every drop, every floor, every city.
           </p>
         </PageHero>
 
@@ -187,12 +174,13 @@ const Events = () => {
         <Marquee
           bg="bg-acid-yellow"
           items={[
-            "BANGALORE · 29 JUN",
-            "BOMBAY · JULY",
-            "HYDERABAD · AUGUST",
-            "DELHI · OCTOBER",
-            "UNDERGROUND · CURATED",
+            "CCDXSOCIAL 01 · 29 JUN",
+            "CCDXSOCIAL 02 · 27 JUL",
+            "CCDXSOCIAL 03 · 30 AUG",
+            "MEGA · OCT 2026",
+            "PETS WELCOME",
             "FREE RSVP",
+            "9 PM SHARP",
           ]}
         />
 
@@ -211,8 +199,8 @@ const Events = () => {
                   CCD × SOCIAL
                 </h2>
                 <p className="text-cream/80 font-medium text-base md:text-lg mt-3 max-w-xl">
-                  Four Sundays across four cities. Easy outdoor afternoons, real underground floors
-                  after dark. Pets welcome at every stop.
+                  India's first curated pet lifestyle series meets underground dance music.
+                  Four shows. One season. The pack in one place.
                 </p>
               </div>
               <Link
@@ -226,14 +214,15 @@ const Events = () => {
             {/* Series show cards — 4 up */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {seriesEvents.map((e, i) => {
+                const isFinale = !!e.is_finale;
                 const isPast   = e.status === "past";
                 const palettes = [
                   "bg-acid-yellow text-ink",
                   "bg-magenta text-cream",
                   "bg-cream text-ink",
-                  "bg-ink text-cream",
+                  "bg-magenta text-cream",
                 ];
-                const pal = palettes[i % palettes.length];
+                const pal = isFinale ? "bg-magenta text-cream" : palettes[i % palettes.length];
                 return (
                   <motion.div
                     key={e.slug}
@@ -246,16 +235,21 @@ const Events = () => {
                       to={`/events/${e.slug}`}
                       className={`relative block border-4 border-ink chunk-shadow p-5 md:p-6 h-full hover:-translate-y-1 hover:translate-x-1 transition-transform ${pal}`}
                     >
-                      <p className={`font-display text-[10px] tracking-widest mb-2 ${isPast ? "text-ink/50" : "text-magenta"}`}>
+                      {isFinale && (
+                        <span className="absolute -top-3 -right-3 rotate-6 bg-acid-yellow text-ink font-display text-[10px] tracking-widest px-2 py-1 border-4 border-ink">
+                          ★ FINALE
+                        </span>
+                      )}
+                      <p className={`font-display text-[10px] tracking-widest mb-2 ${isFinale ? "text-acid-yellow" : isPast ? "text-ink/50" : "text-magenta"}`}>
                         {isPast ? "/ PAST" : "/ UPCOMING"}
                       </p>
                       <h3 className="font-display text-2xl md:text-3xl leading-none mb-2 break-words">
-                        {displayTitle(e.title)}
+                        {e.title.toUpperCase()}
                       </h3>
                       <p className="font-medium text-sm opacity-90 leading-tight mb-3">{e.date}</p>
                       <p className="font-medium text-sm opacity-70 leading-tight">{e.venue}</p>
                       {e.series_tagline && (
-                        <p className="mt-4 text-[10px] font-display tracking-widest opacity-50">
+                        <p className={`mt-4 text-[10px] font-display tracking-widest ${isFinale ? "text-acid-yellow/80" : "opacity-50"}`}>
                           {e.series_tagline}
                         </p>
                       )}
@@ -313,15 +307,13 @@ const Events = () => {
                 <div className={`grid ${poster ? "md:grid-cols-[0.85fr_1.15fr]" : ""}`}>
                   {/* Poster */}
                   {poster ? (
-                    <div className="relative aspect-[3/4] md:aspect-auto md:min-h-[460px] bg-ink border-b-4 md:border-b-0 md:border-r-4 border-ink overflow-hidden">
-                      <Image
+                    <div className="relative bg-ink border-b-4 md:border-b-0 md:border-r-4 border-ink overflow-hidden min-h-[280px]">
+                      <img
                         src={poster}
                         alt={`${nextEvent.title} poster`}
-                        fill
-                        priority
-                        sizes="(max-width: 768px) 100vw, 45vw"
-                        className="object-cover"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                        loading="eager"
+                        className="w-full h-full object-cover aspect-[3/4] md:aspect-auto"
+                        onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>
                   ) : (
@@ -376,11 +368,18 @@ const Events = () => {
                     </p>
 
                     <div className="flex flex-wrap gap-3">
-                      <Link
-                        to={`/events/${nextEvent.slug}`}
+                      <button
+                        type="button"
+                        onClick={() => setRsvpOpen(true)}
                         className="bg-acid-yellow text-ink font-display text-lg md:text-xl px-7 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
                       >
-                        {content.cta_label ?? "VIEW EVENT & RSVP →"}
+                        {content.cta_label ?? "RSVP NOW →"}
+                      </button>
+                      <Link
+                        to={`/events/${nextEvent.slug}`}
+                        className="bg-cream text-ink font-display text-lg md:text-xl px-7 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center"
+                      >
+                        VIEW DETAILS
                       </Link>
                     </div>
                   </div>
@@ -391,126 +390,59 @@ const Events = () => {
         })()}
 
 
-        {/* ── 5. FILTER TABS + ALL EVENTS GRID ── */}
-        <section className="bg-cream border-y-4 border-ink py-12 md:py-16">
-          <div className="container">
-            <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
-              <div>
-                <p className="font-display text-magenta text-base md:text-lg mb-3">/ ALL EVENTS</p>
-                <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight">
-                  BROWSE THE ARCHIVE.
-                </h2>
-              </div>
-              {/* Filter tabs */}
-              <div className="flex flex-wrap gap-2">
-                {([
-                  { key: "all", label: "ALL" },
-                  { key: "upcoming", label: "UPCOMING" },
-                  { key: "past", label: "PAST" },
-                  { key: "series", label: "CCD × SOCIAL" },
-                ] as const).map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setFilter(key)}
-                    className={`font-display text-xs px-4 py-2 border-4 border-ink transition-all ${
-                      filter === key
-                        ? "bg-ink text-cream chunk-shadow"
-                        : "bg-cream text-ink hover:bg-acid-yellow"
-                    }`}
-                  >
-                    {label}
-                    {key !== "all" && (
-                      <span className="ml-1.5 opacity-50">
-                        ({key === "upcoming" ? upcoming.length : key === "past" ? past.length : seriesEvents.length})
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Events grid */}
-            {filteredEvents.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="font-display text-ink/40 text-xl">No events found.</p>
-              </div>
-            ) : (
+        {/* ── 5. PAST EPISODES ── */}
+        {past.length > 0 && (
+          <section className="bg-cream border-y-4 border-ink py-12 md:py-16">
+            <div className="container">
+              <p className="font-display text-magenta text-base md:text-lg mb-3">/ RECAP</p>
+              <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight mb-8">
+                PAST EPISODES.
+              </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredEvents.map((e, i) => {
+                {past.map((e) => {
                   const src = resolvePoster(e.poster_url);
-                  const isPast = e.status === "past";
                   return (
-                    <motion.div
+                    <Link
                       key={e.slug}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, amount: 0.1 }}
-                      transition={{ delay: Math.min(i * 0.05, 0.3), type: "spring", stiffness: 200, damping: 22 }}
+                      to={`/events/${e.slug}`}
+                      className="group block bg-background border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform"
                     >
-                      <Link
-                        to={`/events/${e.slug}`}
-                        className="group block bg-background border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform h-full"
-                      >
-                        <div className="relative bg-ink border-b-4 border-ink aspect-video overflow-hidden">
-                          {src ? (
-                            <Image
-                              src={src}
-                              alt={`${e.title} poster`}
-                              fill
-                              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              className="object-cover group-hover:scale-105 transition-transform duration-500"
-                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ) : (
-                            <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-2xl p-4 text-center">
-                              {e.title}
-                            </div>
-                          )}
-                          {/* Status + series badges */}
-                          <div className="absolute top-2 left-2 flex gap-1.5">
-                            <span className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${
-                              isPast ? "bg-ink text-cream" : "bg-acid-yellow text-ink"
-                            }`}>
-                              {isPast ? "PAST" : "UPCOMING"}
-                            </span>
+                      <div className="relative bg-ink border-b-4 border-ink aspect-video overflow-hidden">
+                        {src ? (
+                          <img
+                            src={src}
+                            alt={`${e.title} poster`}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div className="w-full h-full grid place-items-center bg-ink text-cream font-display text-3xl">
+                            ★ {e.title}
                           </div>
-                          {e.series_label && (
-                            <div className="absolute bottom-2 right-2">
-                              <span className="font-display text-[9px] px-2 py-0.5 bg-electric-blue text-cream border border-cream/30">
-                                {e.series_label}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-5">
-                          <h3 className="font-display text-xl md:text-2xl text-ink leading-tight mb-1 break-words group-hover:text-magenta transition-colors">
-                            {e.title.toUpperCase()}
-                          </h3>
-                          <p className="text-ink/60 font-medium text-sm mb-2">
-                            {e.date} · {e.city} · {e.venue}
-                          </p>
-                          {e.pet_friendly && (
-                            <span className="inline-block text-xs font-display text-electric-blue">🐾 Pet-friendly</span>
-                          )}
-                          {e.series_tagline && (
-                            <p className="mt-2 text-[10px] font-display text-ink/40 tracking-widest uppercase">
-                              {e.series_tagline}
-                            </p>
-                          )}
-                          {!isPast && (
-                            <p className="mt-3 font-display text-xs text-magenta uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                              VIEW & RSVP →
-                            </p>
-                          )}
-                        </div>
-                      </Link>
-                    </motion.div>
+                        )}
+                      </div>
+                      <div className="p-5">
+                        <span className="inline-block bg-ink text-cream text-[10px] font-bold px-2 py-0.5 border-2 border-ink uppercase tracking-widest mb-3">
+                          PAST EPISODE
+                        </span>
+                        <h3 className="font-display text-2xl md:text-3xl text-ink leading-tight mb-1 break-words">
+                          {e.title.toUpperCase()}
+                        </h3>
+                        <p className="text-ink/60 font-medium text-sm">
+                          {e.date} · {e.city} · {e.venue}
+                        </p>
+                      </div>
+                    </Link>
                   );
                 })}
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
+
+        {/* ── 6. CURATED EVENTS from Bangalore ── */}
+        <SafeCuratedEvents />
 
         {/* ── 7. HOST CTA ── */}
         <section className="bg-ink border-t-4 border-ink py-10 md:py-14">
@@ -532,6 +464,18 @@ const Events = () => {
 
         <Footer />
       </main>
+
+      {/* RSVP dialog — scoped to next upcoming event */}
+      {nextEvent && (
+        <RsvpDialog
+          open={rsvpOpen}
+          onOpenChange={setRsvpOpen}
+          eventSlug={nextEvent.slug}
+          eventTitle={`Cats Can Dance — ${nextEvent.title}`}
+          eventDate={nextEvent.date}
+          eventVenue={nextEvent.venue}
+        />
+      )}
     </>
   );
 };

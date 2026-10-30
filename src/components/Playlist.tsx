@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import vinyl from "@/assets/vinyl-music.png";
 import { imgUrl } from "@/lib/img";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-shim";
 
 type Platform = "spotify" | "youtube" | "soundcloud";
 type PlaylistItem = {
@@ -23,38 +23,15 @@ const FALLBACK: PlaylistItem = {
   url: "https://open.spotify.com/playlist/1cEE860l9GiBvIYVM2BbSS",
 };
 
-// Accepts a bare ID, full URL, or Spotify/YouTube URI and returns only the ID
-const extractId = (platform: Platform, raw: string): string => {
-  if (!raw) return raw;
-  if (platform === "spotify") {
-    // e.g. https://open.spotify.com/playlist/1cEE860l9GiBvIYVM2BbSS?si=...
-    const urlMatch = raw.match(/spotify\.com\/(?:playlist|album|track)\/([a-zA-Z0-9]+)/);
-    if (urlMatch) return urlMatch[1];
-    // e.g. spotify:playlist:1cEE860l9GiBvIYVM2BbSS
-    const uriMatch = raw.match(/spotify:[a-z]+:([a-zA-Z0-9]+)/);
-    if (uriMatch) return uriMatch[1];
-  }
-  if (platform === "youtube") {
-    // e.g. https://www.youtube.com/playlist?list=PLxxxxxxx
-    const listMatch = raw.match(/[?&]list=([a-zA-Z0-9_-]+)/);
-    if (listMatch) return listMatch[1];
-  }
-  return raw;
-};
-
-const normalize = (p: any): PlaylistItem => {
-  const platform = (p.platform as Platform) ?? "spotify";
-  const rawId = p.embed_id ?? p.spotify_id ?? "";
-  return {
-    id: p.id,
-    title: p.title,
-    platform,
-    embed_id: extractId(platform, rawId),
-    url:
-      p.url ??
-      (p.spotify_id ? `https://open.spotify.com/playlist/${p.spotify_id}` : ""),
-  };
-};
+const normalize = (p: any): PlaylistItem => ({
+  id: p.id,
+  title: p.title,
+  platform: (p.platform as Platform) ?? "spotify",
+  embed_id: p.embed_id ?? p.spotify_id ?? "",
+  url:
+    p.url ??
+    (p.spotify_id ? `https://open.spotify.com/playlist/${p.spotify_id}` : ""),
+});
 
 const platformGlyph = (p: Platform) =>
   p === "spotify" ? "♫" : p === "youtube" ? "▶" : "☁";
@@ -89,14 +66,16 @@ const Playlist = () => {
   useEffect(() => {
     (async () => {
       const { data } = await supabase
-        .from("playlists")
-        .select("*")
-        .order("sort_order", { ascending: true });
-      const list = (data ?? []).map(normalize).filter((p) => p.embed_id || p.url);
+        .from("site_settings")
+        .select("playlists, featured_playlist_id")
+        .eq("id", "main")
+        .maybeSingle();
+      const raw = ((data?.playlists as unknown) as any[]) ?? [];
+      const list = raw.map(normalize).filter((p) => p.embed_id || p.url);
       if (list.length) {
         setPlaylists(list);
-        const featured = list.find((p) => (p as any).featured);
-        setActiveId(featured ? featured.id : list[0].id);
+        const featured = data?.featured_playlist_id;
+        setActiveId(featured && list.find((p) => p.id === featured) ? featured : list[0].id);
       }
     })();
   }, []);
