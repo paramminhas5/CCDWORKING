@@ -78,13 +78,15 @@ const SSR_AUTH: SafeAuthHook = {
 // as a hook conditional guard per the React rules.
 const isServer = typeof window === "undefined";
 
+import { CLERK_ENABLED } from "@/lib/clerk-config";
+
 // ── Conditional imports: only load Clerk on the client ───────────────────────
 // We use require() inside functions (not top-level import) so that the
 // Clerk module itself is never evaluated during the server render pass
 // of static generation. This prevents Clerk's module init from throwing.
 
 function getClerkHooks() {
-  if (isServer) return null;
+  if (isServer || !CLERK_ENABLED) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require("@clerk/react") as {
@@ -101,7 +103,7 @@ const _clerkModule = isServer ? null : getClerkHooks();
 
 // ── Augmented require for useAuth ─────────────────────────────────────────────
 function getClerkAuthHook() {
-  if (isServer) return null;
+  if (isServer || !CLERK_ENABLED) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require("@clerk/react") as {
@@ -164,11 +166,7 @@ export function useSafeClerk(): SafeClerkHook {
 
 /** True iff Clerk env config is present (client-side check). */
 export function isClerkEnabled(): boolean {
-  if (isServer) return false;
-  return !!(
-    typeof process !== "undefined" &&
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  );
+  return CLERK_ENABLED;
 }
 
 

@@ -2,7 +2,7 @@ import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClerkProvider } from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
+import { CLERK_ENABLED, CLERK_KEY } from "@/lib/clerk-config";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,24 +26,9 @@ function CartSyncProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/**
- * Resolves the Clerk publishable key. Returns "" if missing — callers must
- * handle the empty-key case so the rest of the app still renders.
- */
-function resolveClerkKey(): string {
-  if (typeof window !== "undefined") {
-    const fromHost = publishableKeyFromHost(
-      window.location.hostname,
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
-    );
-    if (fromHost) return fromHost;
-  }
-  return process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
-}
-
 function ClerkWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const clerkPubKey = resolveClerkKey();
+  const clerkPubKey = CLERK_ENABLED ? CLERK_KEY : "";
   const clerkProxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL || undefined;
 
   // No Clerk key → render the app without ClerkProvider so the rest still
@@ -54,8 +39,7 @@ function ClerkWrapper({ children }: { children: React.ReactNode }) {
       (window as any).__ccdClerkWarned = true;
       // eslint-disable-next-line no-console
       console.warn(
-        "[CCD] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — auth features disabled. " +
-          "Set it in Vercel → Project Settings → Environment Variables.",
+        "[CCD] Sign-in is off on this host (no Clerk key, or a production key on a non-production domain). The rest of the site works normally.",
       );
     }
     return <>{children}</>;
