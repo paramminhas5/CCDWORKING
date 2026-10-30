@@ -14,6 +14,7 @@ const primaryLinks = [
   { to: "/videos",      label: "Videos"   },
   { to: "/playlists",   label: "Playlists"},
   { to: "/shop",        label: "Shop"     },
+  { to: "/school",      label: "School"   },
 ];
 
 const partnersLinks = [
