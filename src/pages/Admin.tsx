@@ -1,170 +1,3689 @@
-/**
- * Admin CMS — Supabase Auth (email+password primary, magic link fallback).
- * 
- * Flow:
- * 1. Not signed in → show sign-in form (email + password, or magic link)
- * 2. Signed in but not admin → show "not authorized"
- * 3. Signed in as admin → show CMS tabs
- * 
- * RLS policies enforce access at the database level.
- * Password lives in Supabase Auth — not in env vars or client code.
- */
-"use client";
-
-import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import { uploadPoster } from "@/lib/upload";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase-shim";
+import Nav from "@/components/Nav";
+import SEO from "@/components/SEO";
+import BlogCover from "@/components/BlogCover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { User } from "@supabase/supabase-js";
+import { THEME_PRESETS, resolvePalette, applyTheme } from "@/lib/theme";
+import { useTheme } from "@/components/ThemeProvider";
+import { useSafeUser } from "@/lib/clerk-safe";
+import { useUserRole } from "@/hooks/useUserRole";
 
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Event {
-  id?: string;
+type Category = "GUIDES" | "CULTURE" | "ARTISTS" | "JOURNAL" | "DROPS" | "PETS";
+type DraftPost = {
   slug: string;
   title: string;
-  date: string;
-  city: string;
-  venue: string;
-  status: string;
-  poster_url: string | null;
-  sort_order: number;
-}
+  excerpt: string;
+  category: Category;
+  coverTitle: string;
+  coverColor: string;
+  tag: string;
+  tldr: string[];
+  quickPicks: { title: string; items: string[] };
+  pullQuote: string;
+  whatWedSkip: string;
+  body: string[];
+  seoTitle: string;
+  metaDescription: string;
+  dateISO: string;
+  date?: string;
+  author?: string;
+};
 
-interface Rsvp {
+type Signup = { id: string; email: string; source: string | null; created_at: string };
+type Platform = "spotify" | "youtube" | "soundcloud";
+type PlaylistItem = {
   id: string;
-  event_slug: string;
-  name: string;
-  email: string;
-  plus_ones: number;
-  created_at: string;
-}
-
-interface Video {
-  id?: string;
-  youtube_id: string;
   title: string;
-  thumbnail_url: string;
-  sort_order: number;
-}
-
-interface ContactMessage {
+  platform: Platform;
+  embed_id: string;
+  url: string;
+  spotify_id?: string;
+};
+type Verifications = { google?: string; bing?: string; plausible_domain?: string };
+type MarqueeConfig = {
+  id: string; enabled: boolean; bg: string; reverse: boolean; size: "lg" | "sm"; items: string[];
+};
+type Settings = {
   id: string;
-  name?: string;
-  email?: string;
-  message?: string;
-  created_at: string;
-}
+  playlists: PlaylistItem[];
+  featured_playlist_id: string | null;
+  seo_verifications?: Verifications;
+  marquees?: MarqueeConfig[];
+  theme?: { preset?: string; overrides?: Record<string, string> };
+  home_content?: {
+    about?: { kicker?: string; title?: string; body?: string; ctaLabel?: string; ctaHref?: string };
+    cta?: { title?: string; body?: string; label?: string; href?: string };
+    section_visibility?: { show_scene_map?: boolean; show_pick_your_sound?: boolean; show_featured_artists?: boolean; [key: string]: boolean | undefined };
+  };
+  nav_visibility?: { [key: string]: boolean };
+};
+type MediaItem = { type: "image" | "video"; url: string; caption?: string };
+type EventRow = {
+  id?: string; slug: string; title: string; date: string; city: string; venue: string;
+  blurb: string; lineup: string[]; status: string; poster_url: string | null; sort_order: number;
+  media?: MediaItem[];
+};
+type Message = { id: string; name: string; email: string; message: string; created_at: string };
 
+const PASS_KEY = "ccd_admin_pass";
 
-// ── Auth Gate ─────────────────────────────────────────────────────────────────
-function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"password" | "magic">("password");
-  const [loading, setLoading] = useState(false);
-  const [magicSent, setMagicSent] = useState(false);
-  const [checking, setChecking] = useState(true);
+const extractPlaylistInfo = (
+  platform: Platform,
+  input: string
+): { embed_id: string; url: string } => {
+  const trimmed = input.trim();
+  if (platform === "spotify") {
+    const m = trimmed.match(/playlist\/([a-zA-Z0-9]+)/);
+    const id = m ? m[1] : trimmed;
+    return { embed_id: id, url: `https://open.spotify.com/playlist/${id}` };
+  }
+  if (platform === "youtube") {
+    // Accept full playlist URLs OR a bare playlist ID (PL..., UU..., LL..., FL..., RD...)
+    const fromUrl = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    const bareId = trimmed.match(/^(PL|UU|LL|FL|RD|OL)[a-zA-Z0-9_-]{10,}$/);
+    const id = fromUrl ? fromUrl[1] : bareId ? trimmed : "";
+    if (!id) {
+      throw new Error("That looks like a video URL, not a playlist URL. Paste a YouTube playlist URL (with ?list=...) or a playlist ID starting with PL.");
+    }
+    return { embed_id: id, url: `https://www.youtube.com/playlist?list=${id}` };
+  }
+  return { embed_id: trimmed, url: trimmed };
+};
+
+const normalizePlaylist = (p: any): PlaylistItem => ({
+  id: p.id,
+  title: p.title,
+  platform: (p.platform as Platform) ?? "spotify",
+  embed_id: p.embed_id ?? p.spotify_id ?? "",
+  url:
+    p.url ??
+    (p.spotify_id ? `https://open.spotify.com/playlist/${p.spotify_id}` : ""),
+});
+
+const platformGlyph = (p: Platform) =>
+  p === "spotify" ? "♫" : p === "youtube" ? "▶" : "☁";
+
+const MARQUEE_DEFAULTS: MarqueeConfig[] = [
+  { id: "above-about", enabled: true, bg: "bg-acid-yellow", reverse: false, size: "lg",
+    items: ["WHO WE ARE", "BANGALORE UNDERGROUND", "A CULTURE BRAND", "DANCE · PETS · STREETWEAR"] },
+  { id: "above-events", enabled: true, bg: "bg-orange", reverse: true, size: "sm",
+    items: ["EPISODE 01", "EPISODE 02", "CATCH US LIVE", "BANGALORE", "RSVP NOW"] },
+  { id: "above-videos", enabled: true, bg: "bg-magenta", reverse: false, size: "sm",
+    items: ["WATCH THE TAPES", "LIVE SETS", "RECAPS", "YOUTUBE"] },
+  { id: "above-playlist", enabled: true, bg: "bg-acid-yellow", reverse: true, size: "sm",
+    items: ["NOW SPINNING", "DANCE MUSIC", "LATE NIGHT", "WAREHOUSE CUTS"] },
+  { id: "above-drops", enabled: true, bg: "bg-electric-blue", reverse: false, size: "sm",
+    items: ["STREETWEAR", "LIMITED DROPS", "PET MERCH", "WEAR THE CULTURE"] },
+  { id: "above-instagram", enabled: true, bg: "bg-acid-yellow", reverse: true, size: "sm",
+    items: ["@CATSCANDANCE", "LATEST", "BTS", "FOLLOW"] },
+  { id: "above-early-access", enabled: true, bg: "bg-orange", reverse: false, size: "sm",
+    items: ["JOIN THE PACK", "EARLY ACCESS", "DON'T MISS A DROP"] },
+];
+
+const MARQUEE_BG_OPTIONS = [
+  { value: "bg-acid-yellow", label: "Acid Yellow", swatch: "bg-acid-yellow" },
+  { value: "bg-magenta", label: "Magenta", swatch: "bg-magenta" },
+  { value: "bg-lime", label: "Lime", swatch: "bg-lime" },
+  { value: "bg-electric-blue", label: "Electric Blue", swatch: "bg-electric-blue" },
+  { value: "bg-orange", label: "Orange", swatch: "bg-orange" },
+  { value: "bg-cream", label: "Cream", swatch: "bg-cream" },
+];
+
+const mergeMarquees = (raw?: MarqueeConfig[] | null): MarqueeConfig[] => {
+  const byId = new Map<string, MarqueeConfig>();
+  MARQUEE_DEFAULTS.forEach((m) => byId.set(m.id, { ...m }));
+  for (const r of raw ?? []) {
+    if (!r || typeof r.id !== "string") continue;
+    const base = byId.get(r.id);
+    if (!base) continue;
+    byId.set(r.id, { ...base, ...r, items: Array.isArray(r.items) && r.items.length ? r.items : base.items });
+  }
+  return MARQUEE_DEFAULTS.map((d) => byId.get(d.id)!);
+};
+
+const Admin = () => {
+  const { user, isLoaded } = useSafeUser();
+  const roleInfo = useUserRole();
+  const [password, setPassword] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem(PASS_KEY) ?? "";
+  });
+  const [authed, setAuthed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const themeCtx = useTheme();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const [signups, setSignups] = useState<Signup[]>([]);
+  const [signupSearch, setSignupSearch] = useState("");
+
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [newPlTitle, setNewPlTitle] = useState("");
+  const [newPlUrl, setNewPlUrl] = useState("");
+  const [newPlPlatform, setNewPlPlatform] = useState<Platform>("spotify");
+
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [msgSearch, setMsgSearch] = useState("");
+  const [rsvps, setRsvps] = useState<{ id: string; event_slug: string; name: string; email: string; plus_ones: number; created_at: string }[]>([]);
+  const [rsvpEventFilter, setRsvpEventFilter] = useState<string>("");
+  const [rsvpsLoaded, setRsvpsLoaded] = useState(false);
+
+  // Artists — use the full type defined by ArtistsTab
+  const [artists, setArtists] = useState<AdminArtistFull[]>([]);
+  const [artistsLoaded, setArtistsLoaded] = useState(false);
+  const [artistsBusy, setArtistsBusy] = useState(false);
+
+  const loadArtists = async () => {
+    try {
+      const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+      const res = await fetch("/api/admin/artists", {
+        headers: { "x-admin-password": pwd }
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Failed");
+      setArtists(j.artists ?? []);
+      setArtistsLoaded(true);
+    } catch (e: any) {
+      toast.error("Failed to load artists: " + e.message);
+    }
+  };
+
+  const callEnrich = async (body: Record<string, unknown>) => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const projectUrl = "/api";
+    const res = await fetch(`${projectUrl}/admin/enrich-artists`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": pwd,
+        apikey: "",
+        Authorization: `Bearer ${""}`,
+      },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || "Enrichment failed");
+    return j;
+  };
+
+  const enrichAllArtists = async (force: boolean) => {
+    if (!confirm(force ? "Force re-enrich ALL artists? This will overwrite existing data." : "Enrich all pending artists?")) return;
+    setArtistsBusy(true);
+    toast.message("Enrichment started — this may take a few minutes.");
+    try {
+      const j = await callEnrich({ all: true, force });
+      toast.success(`Enriched ${j.count} artists`);
+      await loadArtists();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setArtistsBusy(false); }
+  };
+
+  const enrichOneArtist = async (id: string) => {
+    setArtistsBusy(true);
+    try {
+      await callEnrich({ artist_id: id, force: true });
+      toast.success("Enriched");
+      await loadArtists();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setArtistsBusy(false); }
+  };
+
+  // Videos
+  type SiteVideo = { id: string; youtube_id: string; title: string; thumbnail_url: string | null; published_at: string | null; sort_order: number; is_featured: boolean };
+  const [videos, setVideos] = useState<SiteVideo[]>([]);
+  const [newVideoUrl, setNewVideoUrl] = useState("");
+  const [newVideoTitle, setNewVideoTitle] = useState("");
+  const [videosLoaded, setVideosLoaded] = useState(false);
+  const [videoBusy, setVideoBusy] = useState(false);
+
+  const callAdminVideos = async (init: { method: string; body?: any }) => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const projectUrl = "/api";
+    const res = await fetch(`${projectUrl}/admin/videos`, {
+      method: init.method,
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": pwd,
+        apikey: "",
+        Authorization: `Bearer ${""}`,
+      },
+      body: init.body ? JSON.stringify(init.body) : undefined,
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || "Request failed");
+    return j;
+  };
+
+  const loadVideos = async () => {
+    try {
+      const j = await callAdminVideos({ method: "GET" });
+      setVideos(j.videos || []);
+      setVideosLoaded(true);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to load videos");
+    }
+  };
+
+  const addVideo = async () => {
+    if (!newVideoUrl.trim()) return;
+    setVideoBusy(true);
+    try {
+      await callAdminVideos({ method: "POST", body: { url: newVideoUrl.trim(), title: newVideoTitle.trim() || undefined } });
+      setNewVideoUrl("");
+      setNewVideoTitle("");
+      await loadVideos();
+      toast.success("Video added");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to add video");
+    } finally {
+      setVideoBusy(false);
+    }
+  };
+
+  const toggleVideoFeatured = async (v: SiteVideo) => {
+    try {
+      await callAdminVideos({ method: "PUT", body: { id: v.id, is_featured: !v.is_featured } });
+      await loadVideos();
+    } catch (e: any) {
+      toast.error(e.message || "Update failed");
+    }
+  };
+
+  const moveVideo = async (v: SiteVideo, dir: -1 | 1) => {
+    const next = (v.sort_order || 0) + dir;
+    try {
+      await callAdminVideos({ method: "PUT", body: { id: v.id, sort_order: next } });
+      await loadVideos();
+    } catch (e: any) {
+      toast.error(e.message || "Reorder failed");
+    }
+  };
+
+  const deleteVideo = async (v: SiteVideo) => {
+    if (!confirm(`Delete "${v.title}"?`)) return;
+    try {
+      await callAdminVideos({ method: "DELETE", body: { id: v.id } });
+      await loadVideos();
+      toast.success("Deleted");
+    } catch (e: any) {
+      toast.error(e.message || "Delete failed");
+    }
+  };
+
+  const callContent = async (init: RequestInit & { search?: string } = {}) => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const projectUrl = "/api";
+    const res = await fetch(`${projectUrl}/admin/content${init.search ?? ""}`, {
+      ...init,
+      headers: {
+        "x-admin-password": pwd,
+        "Content-Type": "application/json",
+        apikey: "",
+        Authorization: `Bearer ${""}`,
+        ...(init.headers ?? {}),
+      },
+    });
+    if (!res.ok) throw new Error("request failed");
+    return res.json();
+  };
+
+  const loadRsvps = async (eventSlug?: string) => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const projectUrl = "/api";
+    const qs = eventSlug ? `?event_slug=${encodeURIComponent(eventSlug)}` : "";
+    try {
+      const res = await fetch(`${projectUrl}/admin/rsvps${qs}`, {
+        headers: {
+          "x-admin-password": pwd,
+          apikey: "",
+          Authorization: `Bearer ${""}`,
+        },
+      });
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json();
+      setRsvps(data?.rsvps ?? []);
+      setRsvpsLoaded(true);
+    } catch (e) {
+      toast.error("Could not load RSVPs");
+    }
+  };
+
+  const downloadRsvpsCsv = () => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const projectUrl = "/api";
+    const params = new URLSearchParams({ format: "csv" });
+    if (rsvpEventFilter) params.set("event_slug", rsvpEventFilter);
+    const url = `${projectUrl}/admin/rsvps?${params.toString()}`;
+    fetch(url, {
+      headers: {
+        "x-admin-password": pwd,
+        apikey: "",
+        Authorization: `Bearer ${""}`,
+      },
+    })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `rsvps-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+      })
+      .catch(() => toast.error("CSV download failed"));
+  };
+
+  const loadAll = async (pwd: string) => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-signups", {
+        headers: { "x-admin-password": pwd },
+      });
+      if (error || (data as any)?.error) throw new Error("auth");
+      setSignups(((data as any)?.signups ?? []) as Signup[]);
+      sessionStorage.setItem(PASS_KEY, pwd);
+      setAuthed(true);
+
+      const [s, e, m] = await Promise.all([
+        callContent({ method: "GET", search: "?type=settings" }),
+        callContent({ method: "GET", search: "?type=events" }),
+        callContent({ method: "GET", search: "?type=messages" }),
+      ]);
+      setSettings(
+        s.settings
+          ? {
+              ...s.settings,
+              playlists: (s.settings.playlists ?? []).map(normalizePlaylist),
+              seo_verifications: s.settings.seo_verifications ?? {},
+              marquees: mergeMarquees(s.settings.marquees),
+              theme: s.settings.theme ?? { preset: "default" },
+              home_content: s.settings.home_content ?? {},
+            }
+          : null
+      );
+      setEvents(e.events);
+      setMessages(m.messages);
+      // Load pending role applications count for badge
+      fetch("/api/role-applications?status=eq.pending", { headers: { "x-admin-password": pwd } })
+        .then(r => r.ok ? r.json() : [])
+        .then(d => setPendingCount(Array.isArray(d) ? d.length : 0))
+        .catch(() => {});
+    } catch {
+      sessionStorage.removeItem(PASS_KEY);
+      setAuthed(false);
+      toast.error("Wrong password — or the admin API is unreachable. Check /api/health in your browser.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) onAuth(user);
-      setChecking(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) onAuth(session.user);
-    });
-    return () => subscription.unsubscribe();
-  }, [onAuth]);
+    const stored = sessionStorage.getItem(PASS_KEY);
+    if (stored) loadAll(stored);
+  }, []);
 
-  const signInWithPassword = async (e: React.FormEvent) => {
+  const onLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) return;
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else if (data.user) {
-      onAuth(data.user);
-    }
+    if (!password) return;
+    loadAll(password);
   };
 
-  const sendMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setLoading(true);
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: `${siteUrl}/admin` },
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
+  const onLogout = () => {
+    sessionStorage.removeItem(PASS_KEY);
+    setAuthed(false);
+    setSignups([]);
+    setPassword("");
+  };
+
+  const downloadCsv = async (kind: "signups" | "messages") => {
+    if (kind === "signups") {
+      const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+      const projectUrl = "/api";
+      const res = await fetch(`${projectUrl}/admin/signups?format=csv`, {
+        headers: {
+          "x-admin-password": pwd,
+          apikey: "",
+          Authorization: `Bearer ${""}`,
+        },
+      });
+      if (!res.ok) return toast.error("Could not download CSV");
+      triggerDownload(await res.blob(), `early-access-${new Date().toISOString().slice(0, 10)}.csv`);
     } else {
-      setMagicSent(true);
-      toast.success("Check your email for the sign-in link");
+      const rows = [
+        ["name", "email", "message", "created_at"].join(","),
+        ...messages.map((m) =>
+          [m.name, m.email, m.message, m.created_at]
+            .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
+        ),
+      ].join("\n");
+      triggerDownload(new Blob([rows], { type: "text/csv" }), `messages-${new Date().toISOString().slice(0, 10)}.csv`);
     }
   };
 
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-ink flex items-center justify-center">
-        <p className="font-display text-cream text-lg animate-pulse">Loading...</p>
-      </div>
-    );
-  }
+  const triggerDownload = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Playlists
+  const savePlaylists = async (next: Settings) => {
+    setSettings(next);
+    try {
+      await callContent({
+        method: "POST",
+        body: JSON.stringify({ type: "settings", action: "upsert", payload: next }),
+      });
+      toast.success("Playlists saved");
+    } catch {
+      toast.error("Save failed");
+    }
+  };
+
+  const addPlaylist = () => {
+    if (!settings || !newPlTitle.trim() || !newPlUrl.trim()) return;
+    let embed_id = "";
+    let url = "";
+    try {
+      const info = extractPlaylistInfo(newPlPlatform, newPlUrl);
+      embed_id = info.embed_id;
+      url = info.url;
+    } catch (e: any) {
+      toast.error(e?.message ?? "Invalid playlist URL");
+      return;
+    }
+    if (!embed_id) { toast.error("Could not parse playlist ID"); return; }
+    const id = `${Date.now()}`;
+    const next: Settings = {
+      ...settings,
+      playlists: [
+        ...settings.playlists,
+        { id, title: newPlTitle.trim(), platform: newPlPlatform, embed_id, url },
+      ],
+      featured_playlist_id: settings.featured_playlist_id ?? id,
+    };
+    setNewPlTitle(""); setNewPlUrl("");
+    savePlaylists(next);
+  };
+
+  const removePlaylist = (id: string) => {
+    if (!settings) return;
+    const remaining = settings.playlists.filter((p) => p.id !== id);
+    const next: Settings = {
+      ...settings,
+      playlists: remaining,
+      featured_playlist_id: settings.featured_playlist_id === id ? remaining[0]?.id ?? null : settings.featured_playlist_id,
+    };
+    savePlaylists(next);
+  };
+
+  const setFeatured = (id: string) => {
+    if (!settings) return;
+    savePlaylists({ ...settings, featured_playlist_id: id });
+  };
+
+  const saveVerifications = async (next: Verifications) => {
+    if (!settings) return;
+    const merged: Settings = { ...settings, seo_verifications: next };
+    setSettings(merged);
+    try {
+      await callContent({
+        method: "POST",
+        body: JSON.stringify({ type: "settings", action: "upsert", payload: merged }),
+      });
+      toast.success("Verification saved");
+    } catch {
+      toast.error("Save failed");
+    }
+  };
+
+  // Events
+  const saveEvent = async (ev: EventRow) => {
+    try {
+      await callContent({
+        method: "POST",
+        body: JSON.stringify({ type: "events", action: "upsert", payload: ev }),
+      });
+      const e = await callContent({ method: "GET", search: "?type=events" });
+      setEvents(e.events);
+      toast.success("Event saved");
+    } catch {
+      toast.error("Save failed");
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    if (!confirm("Delete this event?")) return;
+    try {
+      await callContent({
+        method: "POST",
+        body: JSON.stringify({ type: "events", action: "delete", payload: { id } }),
+      });
+      setEvents(events.filter((e) => e.id !== id));
+      toast.success("Deleted");
+    } catch {
+      toast.error("Delete failed");
+    }
+  };
+
+  const addEvent = () => {
+    setEvents([
+      ...events,
+      {
+        slug: `event-${Date.now()}`, title: "NEW EPISODE", date: "TBA", city: "TBA", venue: "TBA",
+        blurb: "", lineup: [], status: "upcoming", poster_url: null, media: [],
+        sort_order: (events[events.length - 1]?.sort_order ?? 0) + 1,
+      },
+    ]);
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }, 60);
+    toast.success("New event added — fill it in and hit 💾 SAVE EVENT");
+  };
+
+  const filteredSignups = signups.filter((s) => s.email.toLowerCase().includes(signupSearch.toLowerCase()));
+  const filteredMessages = messages.filter((m) =>
+    [m.name, m.email, m.message].join(" ").toLowerCase().includes(msgSearch.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-ink flex items-center justify-center p-4">
-      <div className="bg-cream border-4 border-ink chunk-shadow p-8 max-w-sm w-full">
-        <h1 className="font-display text-3xl text-ink mb-2">CCD ADMIN</h1>
-        <p className="text-ink/60 text-sm mb-6">Sign in to access the CMS.</p>
+    <main className="bg-background text-foreground min-h-screen">
+      <SEO title="Admin — Cats Can Dance" description="Admin dashboard" path="/admin" noindex />
+      <Nav />
+      <section className="pt-32 pb-16 container">
+        {!authed ? (
+          <div className="max-w-md mx-auto bg-cream border-4 border-ink chunk-shadow-lg p-8">
+            <h1 className="font-display text-4xl text-ink mb-2">ADMIN</h1>
+            <p className="text-ink/70 font-medium mb-6">Enter the admin password.</p>
+            <form onSubmit={onLogin} className="space-y-4">
+              <input
+                type="password"
+                required autoFocus value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full bg-cream text-ink border-4 border-ink px-4 py-3 font-display text-lg focus:outline-none focus:bg-acid-yellow"
+              />
+              <button
+                type="submit" disabled={busy}
+                className="w-full bg-ink text-cream font-display text-xl py-3 hover:bg-magenta transition-colors disabled:opacity-60"
+              >
+                {busy ? "CHECKING…" : "UNLOCK"}
+              </button>
+            </form>
+            <div className="mt-6 border-t-4 border-ink/20 pt-4">
+              <p className="font-display text-xs text-ink/50 uppercase tracking-widest mb-2">Troubleshooting</p>
+              <ul className="text-xs text-ink/60 space-y-1">
+                <li>• Set <code className="font-mono">ADMIN_PASSWORD</code> in Vercel env vars</li>
+                <li>• If panel loads blank, check <a href="/api/health" target="_blank" rel="noreferrer" className="underline text-magenta">API health</a></li>
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+              <h1 className="font-display text-4xl md:text-5xl text-ink">DASHBOARD</h1>
+              <button onClick={onLogout} className="bg-cream text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+                LOG OUT
+              </button>
+            </div>
 
-        {magicSent ? (
-          <div className="text-center py-4">
-            <p className="font-display text-2xl text-magenta mb-2">CHECK YOUR EMAIL</p>
-            <p className="text-ink/70 text-sm">
-              Sign-in link sent to <strong>{email}</strong>.
+            <Tabs defaultValue="signups" className="w-full">
+              <TabsList className="bg-cream border-4 border-ink p-1 mb-6 flex-wrap h-auto gap-y-1">
+                {/* ── DATA GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-1">/ DATA</span>
+                <TabsTrigger value="signups" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SIGNUPS</TabsTrigger>
+                <TabsTrigger value="messages" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MESSAGES</TabsTrigger>
+                <TabsTrigger value="rsvps" onClick={() => { if (!rsvpsLoaded) loadRsvps(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">RSVPS</TabsTrigger>
+                {/* ── CONTENT GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ CONTENT</span>
+                <TabsTrigger value="events" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">EVENTS</TabsTrigger>
+                <TabsTrigger value="curated" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">CURATED</TabsTrigger>
+                <TabsTrigger value="blog" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">BLOG</TabsTrigger>
+                <TabsTrigger value="videos" onClick={() => { if (!videosLoaded) loadVideos(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">VIDEOS</TabsTrigger>
+                <TabsTrigger value="playlists" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PLAYLISTS</TabsTrigger>
+                <TabsTrigger value="artists" onClick={() => { if (!artistsLoaded) loadArtists(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">ARTISTS</TabsTrigger>
+                <TabsTrigger value="promoters" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PROMOTERS</TabsTrigger>
+                {/* ── SITE GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ SITE</span>
+                <TabsTrigger value="homepage" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">HOMEPAGE</TabsTrigger>
+                <TabsTrigger value="navigation" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">NAVIGATION</TabsTrigger>
+                <TabsTrigger value="marquees" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MARQUEES</TabsTrigger>
+                <TabsTrigger value="theme" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">THEME</TabsTrigger>
+                <TabsTrigger value="seo" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SEO</TabsTrigger>
+                {/* ── OPERATIONS GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ OPERATIONS</span>
+                <TabsTrigger value="applications" className="font-display data-[state=active]:bg-magenta data-[state=active]:text-cream relative">
+                  APPLICATIONS{pendingCount > 0 && <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] bg-magenta text-cream rounded-full">{pendingCount}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="roles" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">ROLES</TabsTrigger>
+                <TabsTrigger value="ticketing" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">🎟 TICKETING</TabsTrigger>
+                <TabsTrigger value="xp" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">XP / FANS</TabsTrigger>
+                <TabsTrigger value="system" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SYSTEM</TabsTrigger>
+              </TabsList>
+
+              {/* SIGNUPS */}
+              <TabsContent value="signups">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-ink/70 font-medium">{signups.length} total signups</p>
+                  <button onClick={() => downloadCsv("signups")} className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+                    DOWNLOAD CSV
+                  </button>
+                </div>
+                <input
+                  type="search" value={signupSearch}
+                  onChange={(e) => setSignupSearch(e.target.value)}
+                  placeholder="Search by email…"
+                  className="w-full mb-4 bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                />
+                <div className="border-4 border-ink chunk-shadow bg-cream overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-ink text-cream font-display">
+                      <tr><th className="px-4 py-3">EMAIL</th><th className="px-4 py-3">SOURCE</th><th className="px-4 py-3">SIGNED UP</th></tr>
+                    </thead>
+                    <tbody>
+                      {filteredSignups.map((s) => (
+                        <tr key={s.id} className="border-t-2 border-ink/20">
+                          <td className="px-4 py-3 font-medium">{s.email}</td>
+                          <td className="px-4 py-3 text-ink/70">{s.source ?? "—"}</td>
+                          <td className="px-4 py-3 text-ink/70">{new Date(s.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      {filteredSignups.length === 0 && (
+                        <tr><td colSpan={3} className="px-4 py-8 text-center text-ink/60">No signups yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
+
+              {/* PLAYLISTS */}
+              <TabsContent value="playlists">
+                <div className="bg-cream border-4 border-ink chunk-shadow p-6 mb-6">
+                  <h3 className="font-display text-2xl text-ink mb-4">ADD PLAYLIST</h3>
+                  <div className="grid sm:grid-cols-3 gap-3 mb-3">
+                    <select
+                      value={newPlPlatform}
+                      onChange={(e) => setNewPlPlatform(e.target.value as Platform)}
+                      className="bg-cream text-ink border-4 border-ink px-4 py-3 font-display focus:outline-none focus:bg-acid-yellow"
+                    >
+                      <option value="spotify">♫ Spotify</option>
+                      <option value="youtube">▶ YouTube</option>
+                      <option value="soundcloud">☁ SoundCloud</option>
+                    </select>
+                    <input
+                      placeholder="Title (e.g. Summer Mix)"
+                      value={newPlTitle} onChange={(e) => setNewPlTitle(e.target.value)}
+                      className="bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                    <input
+                      placeholder={
+                        newPlPlatform === "spotify"
+                          ? "Spotify playlist URL"
+                          : newPlPlatform === "youtube"
+                          ? "YouTube playlist URL (with ?list=…)"
+                          : "SoundCloud track or playlist URL"
+                      }
+                      value={newPlUrl} onChange={(e) => setNewPlUrl(e.target.value)}
+                      className="bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                  </div>
+                  <button onClick={addPlaylist} className="bg-ink text-cream font-display px-5 py-2 hover:bg-magenta transition-colors">
+                    ADD
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {settings?.playlists.map((p) => (
+                    <div key={p.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center gap-3 justify-between">
+                      <div className="min-w-0">
+                        <p className="font-display text-xl text-ink flex items-center gap-2">
+                          <span aria-hidden>{platformGlyph(p.platform)}</span>
+                          {p.title}
+                          <span className="text-ink/50 text-xs uppercase">{p.platform}</span>
+                        </p>
+                        <p className="text-ink/60 text-sm font-mono truncate max-w-[60ch]">{p.url || p.embed_id}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {settings.featured_playlist_id === p.id ? (
+                          <span className="bg-acid-yellow text-ink font-display px-4 py-2 border-2 border-ink">FEATURED</span>
+                        ) : (
+                          <button onClick={() => setFeatured(p.id)} className="bg-cream text-ink font-display px-4 py-2 border-2 border-ink hover:bg-acid-yellow transition-colors">
+                            SET FEATURED
+                          </button>
+                        )}
+                        <button onClick={() => removePlaylist(p.id)} className="bg-destructive text-cream font-display px-4 py-2 border-2 border-ink">
+                          DELETE
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(!settings || settings.playlists.length === 0) && (
+                    <p className="text-ink/60">No playlists yet.</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* VIDEOS */}
+              <TabsContent value="videos">
+                <div className="bg-cream border-4 border-ink chunk-shadow p-6 mb-6">
+                  <h3 className="font-display text-2xl text-ink mb-4">ADD YOUTUBE VIDEO</h3>
+                  <p className="text-ink/70 text-sm mb-3">
+                    Paste a YouTube URL — title and thumbnail are auto-fetched. Admin-curated videos override the YouTube API feed everywhere on the site.
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                    <input
+                      placeholder="https://youtu.be/… or https://youtube.com/watch?v=…"
+                      value={newVideoUrl}
+                      onChange={(e) => setNewVideoUrl(e.target.value)}
+                      className="bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                    <input
+                      placeholder="Custom title (optional — defaults to YouTube title)"
+                      value={newVideoTitle}
+                      onChange={(e) => setNewVideoTitle(e.target.value)}
+                      className="bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                  </div>
+                  <button
+                    onClick={addVideo}
+                    disabled={videoBusy || !newVideoUrl.trim()}
+                    className="bg-ink text-cream font-display px-5 py-2 hover:bg-magenta transition-colors disabled:opacity-50"
+                  >
+                    {videoBusy ? "ADDING…" : "ADD VIDEO"}
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {videos.map((v) => (
+                    <div key={v.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center gap-4 justify-between">
+                      <div className="flex items-center gap-4 min-w-0">
+                        {v.thumbnail_url && (
+                          <img src={v.thumbnail_url} alt={v.title} className="w-32 h-20 object-cover border-2 border-ink shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-display text-lg text-ink line-clamp-2">{v.title}</p>
+                          <p className="text-ink/60 text-xs font-mono">
+                            {v.youtube_id} · sort {v.sort_order}
+                            {v.published_at ? ` · ${new Date(v.published_at).toLocaleDateString()}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => moveVideo(v, -1)} className="bg-cream text-ink font-display px-3 py-2 border-2 border-ink hover:bg-acid-yellow transition-colors">↑</button>
+                        <button onClick={() => moveVideo(v, 1)} className="bg-cream text-ink font-display px-3 py-2 border-2 border-ink hover:bg-acid-yellow transition-colors">↓</button>
+                        <button
+                          onClick={() => toggleVideoFeatured(v)}
+                          className={`font-display px-4 py-2 border-2 border-ink ${v.is_featured ? "bg-acid-yellow text-ink" : "bg-cream text-ink hover:bg-acid-yellow transition-colors"}`}
+                        >
+                          {v.is_featured ? "★ FEATURED" : "FEATURE"}
+                        </button>
+                        <a
+                          href={`https://www.youtube.com/watch?v=${v.youtube_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-cream text-ink font-display px-4 py-2 border-2 border-ink hover:bg-acid-yellow transition-colors"
+                        >
+                          OPEN
+                        </a>
+                        <button onClick={() => deleteVideo(v)} className="bg-destructive text-cream font-display px-4 py-2 border-2 border-ink">
+                          DELETE
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {videosLoaded && videos.length === 0 && (
+                    <p className="text-ink/60">No admin videos yet. The site will fall back to the YouTube channel feed (RSS) automatically.</p>
+                  )}
+                  {!videosLoaded && (
+                    <p className="text-ink/60">Loading videos…</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* EVENTS */}
+              <TabsContent value="events">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-ink/70 font-medium">{events.length} events</p>
+                  <button onClick={addEvent} className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+                    + NEW EVENT
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {events.map((ev, idx) => (
+                    <EventEditor
+                      key={ev.id ?? ev.slug + idx}
+                      event={ev}
+                      onChange={(next) => setEvents(events.map((e, i) => (i === idx ? next : e)))}
+                      onSave={() => saveEvent(events[idx])}
+                      onDelete={() => ev.id ? deleteEvent(ev.id) : setEvents(events.filter((_, i) => i !== idx))}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+
+              {/* MESSAGES */}
+              <TabsContent value="messages">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-ink/70 font-medium">{messages.length} messages</p>
+                  <button onClick={() => downloadCsv("messages")} className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
+                    DOWNLOAD CSV
+                  </button>
+                </div>
+                <input
+                  type="search" value={msgSearch}
+                  onChange={(e) => setMsgSearch(e.target.value)}
+                  placeholder="Search…"
+                  className="w-full mb-4 bg-cream text-ink border-4 border-ink px-4 py-3 font-medium focus:outline-none focus:bg-acid-yellow"
+                />
+                <div className="space-y-3">
+                  {filteredMessages.map((m) => (
+                    <div key={m.id} className="bg-cream border-4 border-ink chunk-shadow p-5">
+                      <div className="flex flex-wrap justify-between gap-2 mb-2">
+                        <div>
+                          <p className="font-display text-xl text-ink">{m.name}</p>
+                          <a href={`mailto:${m.email}`} className="text-magenta underline font-medium">{m.email}</a>
+                        </div>
+                        <span className="text-ink/60 text-sm">{new Date(m.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="text-ink/80 whitespace-pre-wrap">{m.message}</p>
+                    </div>
+                  ))}
+                  {filteredMessages.length === 0 && (
+                    <p className="text-ink/60 py-8 text-center">No messages.</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* BLOG */}
+              <TabsContent value="blog">
+                <BlogTab />
+              </TabsContent>
+
+              {/* CURATED EVENTS */}
+              <TabsContent value="curated">
+                <CuratedEventsTab />
+              </TabsContent>
+
+              {/* PROMOTERS */}
+              <TabsContent value="promoters">
+                <PromoterApplicationsTab />
+              </TabsContent>
+
+              {/* ARTISTS */}
+              <TabsContent value="artists">
+                <ArtistsTab
+                  artists={artists}
+                  reload={loadArtists}
+                  enrichAll={enrichAllArtists}
+                  enrichOne={enrichOneArtist}
+                  busy={artistsBusy}
+                />
+              </TabsContent>
+
+              {/* SEO CHECKLIST */}
+              <TabsContent value="seo">
+                <div className="space-y-6">
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-6">
+                    <h3 className="font-display text-2xl text-ink mb-1">SEARCH CONSOLE & ANALYTICS</h3>
+                    <p className="text-ink/70 font-medium mb-5">
+                      Paste verification tokens — they'll appear in the page &lt;head&gt; site-wide.
+                    </p>
+                    <VerificationForm
+                      value={settings?.seo_verifications ?? {}}
+                      onSave={saveVerifications}
+                    />
+                  </div>
+
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-5">
+                    <div>
+                      <h3 className="font-display text-2xl text-ink mb-1">SEO + GEO CHECKLIST</h3>
+                      <p className="text-ink/70 font-medium">
+                        Manual tasks to rank for "best parties / events in Bangalore & India" on Google and AI engines (ChatGPT, Perplexity, Gemini).
+                      </p>
+                    </div>
+
+                    <LinkChecklistGroup
+                      title="SEARCH ENGINES"
+                      items={[
+                        { label: "Google Search Console — submit sitemap.xml", url: "https://search.google.com/search-console" },
+                        { label: "Bing Webmaster Tools — submit sitemap", url: "https://www.bing.com/webmasters" },
+                        { label: "Verify ownership in GSC (DNS or HTML tag)", url: "https://search.google.com/search-console" },
+                        { label: "Request indexing for /, /events, /about after each big update", url: "https://search.google.com/search-console" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="GOOGLE BUSINESS / MAPS"
+                      items={[
+                        { label: "Create Google Business Profile: 'Cats Can Dance — Event Organiser, Bangalore'", url: "https://business.google.com/create" },
+                        { label: "Bing Places — claim & list", url: "https://www.bingplaces.com/" },
+                        { label: "Add photos from Episodes, hours, contact, website link", url: "https://business.google.com/" },
+                        { label: "Collect 5★ reviews from attendees after each Episode" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="LOCAL LISTINGS (INDIA)"
+                      items={[
+                        { label: "List on Insider.in (organiser signup)", url: "https://insider.in/organisers" },
+                        { label: "List on BookMyShow Events", url: "https://in.bookmyshow.com/list-your-show" },
+                        { label: "List on Paytm Insider", url: "https://insider.in/" },
+                        { label: "Create Resident Advisor promoter profile", url: "https://ra.co/promoters" },
+                        { label: "List on Skiddle (international reach)", url: "https://www.skiddle.com/promotioncentre/" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="BACKLINKS / PRESS (MUSIC)"
+                      items={[
+                        { label: "Pitch Rolling Stone India", url: "https://rollingstoneindia.com/contact-us/" },
+                        { label: "Pitch Wild City", url: "https://wildcity.com/" },
+                        { label: "Pitch Homegrown", url: "https://homegrown.co.in/" },
+                        { label: "Pitch Mid-day Bangalore + Bangalore Mirror" },
+                        { label: "Reach out to local music podcasts / Spotify editorial" },
+                        { label: "Pitch The Hindu MetroPlus (Bangalore)", url: "https://www.thehindu.com/contact-us/" },
+                        { label: "Pitch Insider.in editorial", url: "https://insider.in/" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="STREETWEAR DIRECTORIES & PRESS"
+                      items={[
+                        { label: "Hypebeast tips", url: "https://hypebeast.com/contact" },
+                        { label: "Highsnobiety submit", url: "https://www.highsnobiety.com/contact/" },
+                        { label: "The Established (India culture)", url: "https://theestablished.com/" },
+                        { label: "Lifestyle Asia India", url: "https://www.lifestyleasia.com/ind/" },
+                        { label: "Grailed seller signup", url: "https://www.grailed.com/sell" },
+                        { label: "Depop India shop", url: "https://www.depop.com/" },
+                        { label: "Sneaker News India tips" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="EVENT DIRECTORIES (GLOBAL)"
+                      items={[
+                        { label: "Songkick promoter", url: "https://www.songkick.com/" },
+                        { label: "Bandsintown for Promoters", url: "https://artists.bandsintown.com/" },
+                        { label: "JamBase events", url: "https://www.jambase.com/" },
+                        { label: "Eventbrite organiser", url: "https://www.eventbrite.com/organizer/overview/" },
+                        { label: "Allevents.in submit", url: "https://allevents.in/" },
+                        { label: "LBB Bangalore submit", url: "https://lbb.in/bangalore/" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="LINK-BAIT ASSETS (DONE FOR YOU)"
+                      items={[
+                        { label: "✓ Press kit page (logos, bios, contact)", url: "/press" },
+                        { label: "✓ Embeddable upcoming-events widget — share with venues/blogs", url: "/embed/upcoming" },
+                        { label: "✓ RSS feed for Feedly / Inoreader / AI pipelines", url: "/rss.xml" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="CONSISTENCY (NAP)"
+                      items={[
+                        { label: "Same Name + Address + Email across IG bio, Linktree, listings" },
+                        { label: "Use 'Cats Can Dance — Bangalore' wording consistently" },
+                        { label: "Link back to https://catscandance.com from every listing" },
+                      ]}
+                    />
+
+                    <LinkChecklistGroup
+                      title="AI / GEO READY (DONE FOR YOU)"
+                      items={[
+                        { label: "✓ /llms.txt — AI crawler brand summary", url: "/llms.txt" },
+                        { label: "✓ /llms-full.txt — long-form brand + events", url: "/llms-full.txt" },
+                        { label: "✓ /brand.json — single-file brand summary for AI agents", url: "/brand.json" },
+                        { label: "✓ robots.txt allows GPTBot / ClaudeBot / PerplexityBot / Google-Extended", url: "/robots.txt" },
+                        { label: "✓ JSON-LD: Organization, LocalBusiness, MusicEvent, FAQ, BlogPosting, ItemList, BreadcrumbList" },
+                        { label: "✓ Geo meta tags + Bangalore address in Footer" },
+                        { label: "✓ Pillar blog posts targeting 'best parties Bangalore'", url: "/blog" },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* MARQUEES */}
+              <TabsContent value="marquees">
+                <p className="text-ink/70 font-medium mb-4">
+                  Toggle, recolor, and edit the scrolling tickers between homepage sections. Items are comma-separated.
+                </p>
+                <div className="space-y-4">
+                  {(settings?.marquees ?? MARQUEE_DEFAULTS).map((m, idx) => (
+                    <div key={m.id} className="bg-cream border-4 border-ink chunk-shadow p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h3 className="font-display text-xl text-ink uppercase">{m.id.replace("above-", "Above: ")}</h3>
+                        <label className="flex items-center gap-2 font-display text-ink cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={m.enabled}
+                            onChange={(e) => {
+                              if (!settings) return;
+                              const next = [...(settings.marquees ?? MARQUEE_DEFAULTS)];
+                              next[idx] = { ...m, enabled: e.target.checked };
+                              setSettings({ ...settings, marquees: next });
+                            }}
+                            className="w-5 h-5 accent-magenta"
+                          />
+                          ENABLED
+                        </label>
+                      </div>
+                      <div className={`${m.bg} border-4 border-ink py-2 px-3 mb-3 overflow-hidden whitespace-nowrap`}>
+                        <span className="font-display text-ink">{m.items.join(" ★ ")}</span>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-display text-xs text-ink/70 mb-1">BACKGROUND</label>
+                          <select
+                            value={m.bg}
+                            onChange={(e) => {
+                              if (!settings) return;
+                              const next = [...(settings.marquees ?? MARQUEE_DEFAULTS)];
+                              next[idx] = { ...m, bg: e.target.value };
+                              setSettings({ ...settings, marquees: next });
+                            }}
+                            className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-display"
+                          >
+                            {MARQUEE_BG_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-end gap-4">
+                          <label className="flex items-center gap-2 font-display text-ink cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={m.reverse}
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const next = [...(settings.marquees ?? MARQUEE_DEFAULTS)];
+                                next[idx] = { ...m, reverse: e.target.checked };
+                                setSettings({ ...settings, marquees: next });
+                              }}
+                              className="w-5 h-5 accent-magenta"
+                            />
+                            REVERSE
+                          </label>
+                          <label className="flex items-center gap-2 font-display text-ink cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={m.size === "lg"}
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const next = [...(settings.marquees ?? MARQUEE_DEFAULTS)];
+                                next[idx] = { ...m, size: e.target.checked ? "lg" : "sm" };
+                                setSettings({ ...settings, marquees: next });
+                              }}
+                              className="w-5 h-5 accent-magenta"
+                            />
+                            LARGE
+                          </label>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <label className="block font-display text-xs text-ink/70 mb-1">ITEMS (comma-separated)</label>
+                        <input
+                          value={m.items.join(", ")}
+                          onChange={(e) => {
+                            if (!settings) return;
+                            const items = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                            const next = [...(settings.marquees ?? MARQUEE_DEFAULTS)];
+                            next[idx] = { ...m, items: items.length ? items : m.items };
+                            setSettings({ ...settings, marquees: next });
+                          }}
+                          className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-display"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={async () => {
+                      if (!settings) return;
+                      try {
+                        await callContent({
+                          method: "POST",
+                          body: JSON.stringify({ type: "settings", action: "upsert", payload: settings }),
+                        });
+                        toast.success("Marquees saved");
+                      } catch {
+                        toast.error("Save failed");
+                      }
+                    }}
+                    className="bg-ink text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                  >
+                    💾 SAVE MARQUEES
+                  </button>
+                </div>
+              </TabsContent>
+
+              {/* THEME */}
+              <TabsContent value="theme">
+                <p className="text-ink/70 font-medium mb-4">
+                  Pick a preset to re-skin the entire site. Saves apply live to every open visitor.
+                </p>
+                <div className="grid sm:grid-cols-3 gap-4 mb-6">
+                  {Object.keys(THEME_PRESETS).map((id) => {
+                    const preset = THEME_PRESETS[id];
+                    const palette = resolvePalette({ preset: id });
+                    const swatches = [palette.magenta, palette.acidYellow, palette.electricBlue, palette.cream, palette.ink];
+                    const active = (settings?.theme?.preset ?? "default") === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => settings && setSettings({ ...settings, theme: { preset: id } })}
+                        className={`text-left bg-cream border-4 border-ink chunk-shadow p-4 transition-transform hover:-translate-y-1 ${active ? "ring-4 ring-magenta" : ""}`}
+                      >
+                        <div className="flex gap-1 mb-3">
+                          {swatches.map((c, i) => (
+                            <span key={i} className="w-8 h-8 border-2 border-ink" style={{ background: `hsl(${c})` }} />
+                          ))}
+                        </div>
+                        <p className="font-display text-xl text-ink">{preset.label.toUpperCase()}</p>
+                        <p className="text-ink/70 text-sm">{preset.description}</p>
+                        {active && <p className="font-display text-xs text-magenta mt-2">★ ACTIVE</p>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="bg-cream border-4 border-ink chunk-shadow p-4 mb-4">
+                  <p className="font-display text-ink mb-3">COLOR OVERRIDES (HSL — e.g. <code>0 72% 51%</code>)</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {(["brand", "accent", "surface", "surfaceAlt", "onBrand", "onSurface"] as const).map((k) => {
+                      const v = settings?.theme?.overrides?.[k] ?? "";
+                      return (
+                        <div key={k}>
+                          <label className="block font-display text-xs text-ink/70 mb-1">{k.toUpperCase()}</label>
+                          <div className="flex gap-2">
+                            <span className="w-10 h-10 border-2 border-ink shrink-0" style={{ background: v ? `hsl(${v})` : "transparent" }} />
+                            <input
+                              value={v}
+                              placeholder="leave blank to use preset"
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const next = { ...(settings.theme?.overrides ?? {}) };
+                                if (e.target.value.trim()) next[k] = e.target.value.trim();
+                                else delete next[k];
+                                setSettings({
+                                  ...settings,
+                                  theme: { preset: settings.theme?.preset ?? "default", overrides: next },
+                                });
+                              }}
+                              className="flex-1 bg-cream text-ink border-4 border-ink px-3 py-2 font-display text-sm"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      if (!settings) return;
+                      try {
+                        await callContent({
+                          method: "POST",
+                          body: JSON.stringify({
+                            type: "settings",
+                            action: "upsert",
+                            payload: { theme: settings.theme ?? { preset: "default" } },
+                          }),
+                        });
+                        // Apply locally right away: drop any local override and
+                        // apply the freshly-saved preset so the admin sees it instantly.
+                        themeCtx.clearOverride();
+                        applyTheme({ preset: settings.theme?.preset ?? "default", overrides: settings.theme?.overrides as any });
+                        toast.success("Theme saved — applied live");
+                      } catch {
+                        toast.error("Save failed");
+                      }
+                    }}
+                    className="bg-ink text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                  >
+                    💾 SAVE THEME
+                  </button>
+                  <button
+                    onClick={() => settings && setSettings({ ...settings, theme: { preset: settings.theme?.preset ?? "default" } })}
+                    className="bg-cream text-ink font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                  >
+                    RESET OVERRIDES
+                  </button>
+                </div>
+              </TabsContent>
+
+              {/* HOMEPAGE */}
+              <TabsContent value="homepage">
+                <p className="text-ink/70 font-medium mb-4">
+                  Edit copy and control which sections appear on the homepage.
+                </p>
+                <div className="space-y-6">
+
+                  {/* ── Section Visibility Toggles ── */}
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-4">
+                    <p className="font-display text-xl text-ink mb-1">HOMEPAGE SECTIONS</p>
+                    <p className="text-ink/60 text-sm font-medium mb-4">Toggle sections on or off. Changes take effect on next page load.</p>
+                    <div className="space-y-3">
+                      {[
+                        { key: "show_scene_map",        label: "Scene Map",        desc: "India's Cities — 6 city tiles with event counts" },
+                        { key: "show_pick_your_sound",   label: "Pick Your Sound",  desc: "Genre grid — Techno, House, Jungle, UK Garage, Disco, Ambient" },
+                        { key: "show_featured_artists",  label: "Featured Artists", desc: "Artist carousel — pulls from artists with featured=true" },
+                      ].map(({ key, label, desc }) => {
+                        const vis = (settings?.home_content as any)?.section_visibility ?? {};
+                        const checked = key in vis ? !!vis[key] : true;
+                        return (
+                          <label key={key} className={`flex items-start gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const currentVis = (settings.home_content as any)?.section_visibility ?? {};
+                                setSettings({
+                                  ...settings,
+                                  home_content: {
+                                    ...(settings.home_content ?? {}),
+                                    section_visibility: { ...currentVis, [key]: e.target.checked },
+                                  },
+                                });
+                              }}
+                              className="w-5 h-5 mt-0.5 accent-magenta shrink-0"
+                            />
+                            <div>
+                              <p className="font-display text-ink text-base">{label}</p>
+                              <p className="text-ink/60 text-xs font-medium">{desc}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-4">
+                    <p className="font-display text-xl text-ink mb-3">ABOUT STRIP</p>
+                    {([
+                      { k: "kicker", label: "Kicker (e.g. / THE BRAND)", multiline: false },
+                      { k: "title", label: "Title", multiline: false },
+                      { k: "body", label: "Body", multiline: true },
+                      { k: "ctaLabel", label: "CTA label", multiline: false },
+                      { k: "ctaHref", label: "CTA link", multiline: false },
+                    ] as const).map((f) => {
+                      const val = (settings?.home_content?.about as any)?.[f.k] ?? "";
+                      const onChange = (v: string) => {
+                        if (!settings) return;
+                        setSettings({
+                          ...settings,
+                          home_content: {
+                            ...(settings.home_content ?? {}),
+                            about: { ...(settings.home_content?.about ?? {}), [f.k]: v },
+                          },
+                        });
+                      };
+                      return (
+                        <div key={f.k} className="mb-3">
+                          <label className="block font-display text-xs text-ink/70 mb-1">{f.label.toUpperCase()}</label>
+                          {f.multiline ? (
+                            <textarea
+                              value={val}
+                              onChange={(e) => onChange(e.target.value)}
+                              rows={3}
+                              className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-medium"
+                            />
+                          ) : (
+                            <input
+                              value={val}
+                              onChange={(e) => onChange(e.target.value)}
+                              className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-medium"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!settings) return;
+                      try {
+                        await callContent({
+                          method: "POST",
+                          body: JSON.stringify({
+                            type: "settings",
+                            action: "upsert",
+                            payload: { home_content: settings.home_content ?? {} },
+                          }),
+                        });
+                        toast.success("Homepage content saved");
+                      } catch {
+                        toast.error("Save failed");
+                      }
+                    }}
+                    className="bg-ink text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                  >
+                    💾 SAVE HOMEPAGE
+                  </button>
+                </div>
+              </TabsContent>
+
+              {/* NAVIGATION */}
+              <TabsContent value="navigation">
+                <p className="text-ink/70 font-medium mb-4">
+                  Toggle nav links on or off. Hidden links are removed from both the desktop bar and mobile menu.
+                  Changes take effect on next page load.
+                </p>
+                {(() => {
+                  const nav = settings?.nav_visibility ?? {};
+                  const isOn = (key: string) => key in nav ? !!nav[key] : true;
+
+                  const groups: { group: string; links: { key: string; label: string; desc: string }[] }[] = [
+                    {
+                      group: "Primary Bar",
+                      links: [
+                        { key: "about",      label: "About",    desc: "/about" },
+                        { key: "discover",   label: "Discover", desc: "/discover" },
+                        { key: "events",     label: "Events",   desc: "/events" },
+                        { key: "ccdxsocial", label: "Series",   desc: "/ccdxsocial" },
+                        { key: "artists",    label: "Artists",  desc: "/artists" },
+                        { key: "shop",       label: "Shop",     desc: "/shop" },
+                      ],
+                    },
+                    {
+                      group: "Work With Us Dropdown",
+                      links: [
+                        { key: "talent",        label: "Talent Directory", desc: "/talent" },
+                        { key: "for-venues",    label: "For Venues",       desc: "/for-venues" },
+                        { key: "for-artists",   label: "For Artists",      desc: "/for-artists" },
+                        { key: "for-investors", label: "For Investors",    desc: "/for-investors" },
+                        { key: "book",          label: "Book an Artist",   desc: "/book" },
+                        { key: "promoters",     label: "Promoters",        desc: "/promoters" },
+                      ],
+                    },
+                    {
+                      group: "More Dropdown",
+                      links: [
+                        { key: "care",      label: "Cats Can Care", desc: "/care" },
+                        { key: "videos",    label: "Videos",        desc: "/videos" },
+                        { key: "playlists", label: "Playlists",     desc: "/playlists" },
+                        { key: "pets",      label: "Pets",          desc: "/pets" },
+                        { key: "blog",      label: "Blog",          desc: "/blog" },
+                        { key: "learn",     label: "Learn",         desc: "learn.catscandance.com (external)" },
+                      ],
+                    },
+                  ];
+
+                  const toggle = (key: string, val: boolean) => {
+                    if (!settings) return;
+                    setSettings({
+                      ...settings,
+                      nav_visibility: { ...(settings.nav_visibility ?? {}), [key]: val },
+                    });
+                  };
+
+                  return (
+                    <div className="space-y-6">
+                      {groups.map(({ group, links }) => (
+                        <div key={group} className="bg-cream border-4 border-ink chunk-shadow p-4">
+                          <p className="font-display text-xl text-ink mb-1">{group.toUpperCase()}</p>
+                          <div className="space-y-2 mt-3">
+                            {links.map(({ key, label, desc }) => {
+                              const checked = isOn(key);
+                              return (
+                                <label
+                                  key={key}
+                                  className={`flex items-center gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${
+                                    checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => toggle(key, e.target.checked)}
+                                    className="w-5 h-5 accent-magenta shrink-0"
+                                  />
+                                  <div>
+                                    <p className="font-display text-ink text-base">{label}</p>
+                                    <p className="text-ink/60 text-xs font-medium">{desc}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={async () => {
+                          if (!settings) return;
+                          try {
+                            await callContent({
+                              method: "POST",
+                              body: JSON.stringify({
+                                type: "settings",
+                                action: "upsert",
+                                payload: { nav_visibility: settings.nav_visibility ?? {} },
+                              }),
+                            });
+                            toast.success("Navigation saved");
+                          } catch {
+                            toast.error("Save failed");
+                          }
+                        }}
+                        className="bg-ink text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                      >
+                        💾 SAVE NAVIGATION
+                      </button>
+                    </div>
+                  );
+                })()}
+              </TabsContent>
+
+              <TabsContent value="rsvps">
+                <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="block font-display text-xs text-ink/70 mb-1">FILTER BY EVENT</label>
+                      <select
+                        value={rsvpEventFilter}
+                        onChange={(e) => {
+                          const slug = e.target.value;
+                          setRsvpEventFilter(slug);
+                          loadRsvps(slug || undefined);
+                        }}
+                        className="bg-cream text-ink border-4 border-ink px-3 py-2 font-display"
+                      >
+                        <option value="">All events</option>
+                        {events.map((ev) => (
+                          <option key={ev.slug} value={ev.slug}>{ev.title} ({ev.slug})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => loadRsvps(rsvpEventFilter || undefined)}
+                      className="bg-cream text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                    >
+                      🔄 REFRESH
+                    </button>
+                  </div>
+                  <button
+                    onClick={downloadRsvpsCsv}
+                    className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                  >
+                    DOWNLOAD CSV
+                  </button>
+                </div>
+                <p className="text-ink/70 font-medium mb-3">{rsvps.length} RSVP{rsvps.length === 1 ? "" : "s"}</p>
+                <div className="border-4 border-ink chunk-shadow bg-cream overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-ink text-cream font-display">
+                      <tr>
+                        <th className="px-4 py-3">EVENT</th>
+                        <th className="px-4 py-3">NAME</th>
+                        <th className="px-4 py-3">EMAIL</th>
+                        <th className="px-4 py-3">+1s</th>
+                        <th className="px-4 py-3">SUBMITTED</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rsvps.map((r) => (
+                        <tr key={r.id} className="border-t-2 border-ink/20">
+                          <td className="px-4 py-3 font-display">{r.event_slug}</td>
+                          <td className="px-4 py-3 font-medium">{r.name}</td>
+                          <td className="px-4 py-3 text-ink/80">{r.email}</td>
+                          <td className="px-4 py-3 text-ink/80">{r.plus_ones}</td>
+                          <td className="px-4 py-3 text-ink/70">{new Date(r.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      {rsvps.length === 0 && (
+                        <tr><td colSpan={5} className="px-4 py-8 text-center text-ink/60">{rsvpsLoaded ? "No RSVPs yet." : "Loading…"}</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
+
+              {/* ── OPERATIONS TABS ─────────────────────────────────────────── */}
+
+              {/* APPLICATIONS */}
+              <TabsContent value="applications">
+                <ApplicationsTab userId={user?.id ?? "admin-pw"} onCountChange={setPendingCount} />
+              </TabsContent>
+
+              {/* ROLES */}
+              <TabsContent value="roles">
+                <RolesTab userId={user?.id ?? "admin-pw"} />
+              </TabsContent>
+
+              {/* TICKETING */}
+              <TabsContent value="ticketing">
+                <TicketingTab />
+              </TabsContent>
+
+              {/* XP / FANS */}
+              <TabsContent value="xp">
+                <XPTab />
+              </TabsContent>
+
+              {/* SYSTEM */}
+              <TabsContent value="system">
+                <SystemTab />
+              </TabsContent>
+
+            </Tabs>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+};
+
+const EventEditor = ({
+  event, onChange, onSave, onDelete,
+}: {
+  event: EventRow;
+  onChange: (e: EventRow) => void;
+  onSave: () => void;
+  onDelete: () => void;
+}) => {
+  const [lineupStr, setLineupStr] = useState((event.lineup ?? []).join(", "));
+  useEffect(() => { setLineupStr((event.lineup ?? []).join(", ")); }, [event.id]);
+  const commitLineup = () => onChange({ ...event, lineup: lineupStr.split(",").map((s) => s.trim()).filter(Boolean) });
+  const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
+  const projectUrl = "/api";
+
+  // ── AI Poster generation via fal.ai flux/dev ───────────────────────────────
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  const generatePoster = async () => {
+    setGenerating(true);
+    setGeneratedPreview(null);
+    try {
+      // Detect CCDxSocial series from slug or series_label
+      const isCCDxSocial =
+        event.slug?.includes("ccdxsocial") ||
+        (event as any).series_label?.toLowerCase().includes("ccdxsocial") ||
+        (event as any).series === "ccdxsocial";
+
+      const res = await fetch(`${projectUrl}/generate-poster`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:          event.title,
+          date:           event.date,
+          venue:          event.venue,
+          city:           event.city,
+          lineup:         lineupStr,
+          series_label:   (event as any).series_label ?? "",
+          is_ccdxsocial:  isCCDxSocial,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast.error(data.error || data.message || "Generation failed");
+        return;
+      }
+      setGeneratedPreview(data.image_url);
+      setLastPrompt(data.prompt_used ?? null);
+      toast.success("Poster generated! Click 'USE THIS POSTER' to apply.");
+    } catch (e: any) {
+      toast.error(e.message ?? "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const uploadFile = async (file: File): Promise<{ path: string; publicUrl: string } | null> => {
+    const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+    const ext = file.name.split(".").pop() ?? "jpg";
+
+    // Step 1 — ask the API for a signed upload URL (tiny JSON request, no file sent)
+    const signRes = await fetch(`${projectUrl}/admin/upload-poster`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": pwd,
+      },
+      body: JSON.stringify({
+        slug: event.slug || "poster",
+        ext,
+        mimeType: file.type || "image/jpeg",
+      }),
+    });
+    const signData = await signRes.json();
+    if (!signRes.ok) throw new Error(signData?.error ?? "Could not get upload URL");
+
+    const { signedUrl, path, publicUrl } = signData as {
+      signedUrl: string;
+      path: string;
+      publicUrl: string;
+    };
+
+    // Step 2 — PUT the file directly to Supabase Storage (bypasses Vercel size limit)
+    const uploadRes = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => "upload error");
+      throw new Error(errText);
+    }
+
+    return { path, publicUrl };
+  };
+
+  const onUpload = async (file: File) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const data = await uploadFile(file);
+      if (!data) return;
+      onChange({ ...event, poster_url: data.publicUrl });
+      toast.success("Poster uploaded — hit SAVE to persist");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const onGalleryUpload = async (file: File) => {
+    if (!file) return;
+    setGalleryUploading(true);
+    try {
+      const data = await uploadFile(file);
+      if (!data) return;
+      const type: "image" | "video" = file.type.startsWith("video") ? "video" : "image";
+      const next: MediaItem[] = [...(event.media ?? []), { type, url: data.publicUrl, caption: "" }];
+      onChange({ ...event, media: next });
+      toast.success("Added — hit SAVE to persist");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setGalleryUploading(false);
+    }
+  };
+
+  const updateMedia = (idx: number, patch: Partial<MediaItem>) => {
+    const next = (event.media ?? []).map((m, i) => (i === idx ? { ...m, ...patch } : m));
+    onChange({ ...event, media: next });
+  };
+  const removeMedia = (idx: number) => {
+    onChange({ ...event, media: (event.media ?? []).filter((_, i) => i !== idx) });
+  };
+  const moveMedia = (idx: number, dir: -1 | 1) => {
+    const arr = [...(event.media ?? [])];
+    const j = idx + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    onChange({ ...event, media: arr });
+  };
+
+
+  const sharLink = async () => {
+    const url = `https://catscandance.com/events/${event.slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied: " + url);
+    } catch {
+      toast.error("Couldn't copy link");
+    }
+  };
+
+  const posterPreview = (() => {
+    const raw = (event.poster_url ?? "").trim();
+    if (!raw) return null;
+    if (raw.startsWith("http") || raw.startsWith("/")) return raw;
+    try {
+      const { data } = supabase.storage.from("event-posters").getPublicUrl(raw);
+      return data?.publicUrl ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  return (
+    <div className="bg-cream border-4 border-ink chunk-shadow p-5 space-y-3">
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Title" value={event.title} onChange={(v) => onChange({ ...event, title: v })} />
+        <Field label="Slug" value={event.slug} onChange={(v) => onChange({ ...event, slug: v })} />
+        <Field label="Date" value={event.date} onChange={(v) => onChange({ ...event, date: v })} />
+        <Field label="City" value={event.city} onChange={(v) => onChange({ ...event, city: v })} />
+        <Field label="Venue" value={event.venue} onChange={(v) => onChange({ ...event, venue: v })} />
+        <div>
+          <label className="block font-display text-sm text-ink mb-1">Status</label>
+          <select
+            value={event.status}
+            onChange={(e) => onChange({ ...event, status: e.target.value })}
+            className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+          >
+            <option value="upcoming">upcoming</option>
+            <option value="past">past</option>
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block font-display text-sm text-ink mb-1">Poster</label>
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <input
+              type="text"
+              placeholder="Paste URL or upload below"
+              value={event.poster_url ?? ""}
+              onChange={(e) => onChange({ ...event, poster_url: e.target.value || null })}
+              className="flex-1 min-w-[220px] bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+            <label className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform cursor-pointer">
+              {uploading ? "UPLOADING…" : "📤 UPLOAD"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onUpload(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={generatePoster}
+              disabled={generating}
+              className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {generating ? "✨ GENERATING…" : "✨ AI POSTER"}
+            </button>
+            {posterPreview && (
+              <img src={posterPreview} alt="poster preview" className="h-16 w-12 object-cover border-2 border-ink" />
+            )}
+          </div>
+
+          {/* AI generated poster preview + accept/reject */}
+          {generatedPreview && (
+            <div className="border-4 border-electric-blue p-3 bg-cream flex flex-wrap items-start gap-4">
+              <img
+                src={generatedPreview}
+                alt="AI generated poster"
+                className="h-48 w-36 object-cover border-2 border-ink"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-display text-sm text-ink mb-1">✨ CCD AI POSTER</p>
+                <p className="text-ink/60 text-xs mb-3">
+                  Generated by fal.ai Flux. Click "Use This Poster" to apply, then hit SAVE.
+                  Not right? Regenerate for a new variation.
+                </p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange({ ...event, poster_url: generatedPreview });
+                      setGeneratedPreview(null);
+                      setLastPrompt(null);
+                      toast.success("Poster set — hit SAVE EVENT to persist");
+                    }}
+                    className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-sm"
+                  >
+                    ✓ USE THIS POSTER
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generatePoster}
+                    disabled={generating}
+                    className="bg-cream text-ink font-display px-4 py-2 border-4 border-ink hover:bg-electric-blue hover:text-cream transition-colors text-sm disabled:opacity-60"
+                  >
+                    {generating ? "GENERATING…" : "↻ REGENERATE"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setGeneratedPreview(null); setLastPrompt(null); }}
+                    className="bg-cream text-ink/50 font-display px-4 py-2 border-4 border-ink/30 hover:border-ink text-sm"
+                  >
+                    ✕ DISCARD
+                  </button>
+                </div>
+                {/* Debug: show the prompt that was sent */}
+                {lastPrompt && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPrompt((v) => !v)}
+                      className="font-display text-[10px] text-ink/40 hover:text-ink uppercase tracking-widest"
+                    >
+                      {showPrompt ? "▲ HIDE PROMPT" : "▼ VIEW PROMPT"}
+                    </button>
+                    {showPrompt && (
+                      <pre className="mt-2 text-[10px] text-ink/60 whitespace-pre-wrap bg-ink/5 border border-ink/20 p-2 max-h-40 overflow-y-auto font-mono">
+                        {lastPrompt}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <Field
+          label="Sort order"
+          value={String(event.sort_order)}
+          onChange={(v) => onChange({ ...event, sort_order: Number(v) || 0 })}
+        />
+      </div>
+      <div>
+        <label className="block font-display text-sm text-ink mb-1">Blurb</label>
+        <textarea
+          rows={3} value={event.blurb}
+          onChange={(e) => onChange({ ...event, blurb: e.target.value })}
+          className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+        />
+      </div>
+      <div>
+        <label className="block font-display text-sm text-ink mb-1">Lineup (comma-separated)</label>
+        <input
+          value={lineupStr}
+          onChange={(e) => setLineupStr(e.target.value)}
+          onBlur={commitLineup}
+          className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+        />
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block font-display text-sm text-ink">Gallery ({(event.media ?? []).length})</label>
+          <label className="bg-acid-yellow text-ink font-display px-3 py-1.5 border-2 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform cursor-pointer text-sm">
+            {galleryUploading ? "UPLOADING…" : "+ ADD PHOTO/VIDEO"}
+            <input
+              type="file"
+              accept="image/*,video/mp4,video/webm"
+              className="hidden"
+              disabled={galleryUploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onGalleryUpload(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+        {(event.media ?? []).length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(event.media ?? []).map((m, i) => (
+              <div key={`${m.url}-${i}`} className="bg-background border-2 border-ink p-2 space-y-2">
+                <div className="flex gap-2">
+                  {m.type === "video" ? (
+                    <video src={m.url} muted playsInline className="h-20 w-28 object-cover bg-ink border-2 border-ink shrink-0" />
+                  ) : (
+                    <img src={m.url} alt="" className="h-20 w-28 object-cover border-2 border-ink shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <input
+                      type="text"
+                      placeholder="Caption (optional)"
+                      value={m.caption ?? ""}
+                      onChange={(e) => updateMedia(i, { caption: e.target.value })}
+                      className="w-full bg-cream text-ink border-2 border-ink px-2 py-1 text-sm font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                    <p className="text-xs text-ink/60 uppercase font-display">{m.type}</p>
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => moveMedia(i, -1)} disabled={i === 0} className="bg-ink text-cream font-display px-2 py-1 text-xs disabled:opacity-30">▲</button>
+                  <button type="button" onClick={() => moveMedia(i, 1)} disabled={i === (event.media ?? []).length - 1} className="bg-ink text-cream font-display px-2 py-1 text-xs disabled:opacity-30">▼</button>
+                  <button type="button" onClick={() => removeMedia(i)} className="ml-auto bg-destructive text-cream font-display px-2 py-1 text-xs">✕ REMOVE</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onSave} className="bg-ink text-cream font-display px-6 py-3 hover:bg-magenta transition-colors text-base">
+          💾 SAVE EVENT
+        </button>
+        <button onClick={sharLink} className="bg-acid-yellow text-ink font-display px-5 py-3 border-2 border-ink hover:bg-magenta hover:text-cream transition-colors">
+          ↗ SHARE
+        </button>
+        <button onClick={onDelete} className="bg-destructive text-cream font-display px-5 py-3">DELETE</button>
+      </div>
+    </div>
+  );
+};
+
+const Field = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
+  <div>
+    <label className="block font-display text-sm text-ink mb-1">{label}</label>
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+    />
+  </div>
+);
+
+const ChecklistGroup = ({ title, items }: { title: string; items: string[] }) => (
+  <div>
+    <p className="font-display text-magenta text-lg mb-2">/ {title}</p>
+    <ul className="space-y-2">
+      {items.map((it) => (
+        <li key={it} className="flex items-start gap-3 bg-background/50 border-2 border-ink/20 px-3 py-2">
+          <span className="font-display text-ink/40 mt-0.5">▢</span>
+          <span className="text-ink/85 font-medium">{it}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+const LinkChecklistGroup = ({
+  title,
+  items,
+}: {
+  title: string;
+  items: { label: string; url?: string }[];
+}) => (
+  <div>
+    <p className="font-display text-magenta text-lg mb-2">/ {title}</p>
+    <ul className="space-y-2">
+      {items.map((it) => (
+        <li key={it.label} className="flex items-start gap-3 bg-background/50 border-2 border-ink/20 px-3 py-2">
+          <span className="font-display text-ink/40 mt-0.5">▢</span>
+          {it.url ? (
+            <a
+              href={it.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ink/85 font-medium underline decoration-2 underline-offset-2 hover:text-magenta transition-colors"
+            >
+              {it.label} ↗
+            </a>
+          ) : (
+            <span className="text-ink/85 font-medium">{it.label}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+const VerificationForm = ({
+  value,
+  onSave,
+}: {
+  value: Verifications;
+  onSave: (v: Verifications) => void;
+}) => {
+  const [google, setGoogle] = useState(value.google ?? "");
+  const [bing, setBing] = useState(value.bing ?? "");
+  const [plausible, setPlausible] = useState(value.plausible_domain ?? "");
+
+  useEffect(() => {
+    setGoogle(value.google ?? "");
+    setBing(value.bing ?? "");
+    setPlausible(value.plausible_domain ?? "");
+  }, [value.google, value.bing, value.plausible_domain]);
+
+  return (
+    <div className="grid sm:grid-cols-3 gap-3">
+      <div>
+        <label className="block font-display text-sm text-ink mb-1">Google site-verification token</label>
+        <input
+          value={google}
+          onChange={(e) => setGoogle(e.target.value)}
+          placeholder="abc123...xyz"
+          className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-mono text-sm focus:outline-none focus:bg-acid-yellow"
+        />
+      </div>
+      <div>
+        <label className="block font-display text-sm text-ink mb-1">Bing msvalidate.01</label>
+        <input
+          value={bing}
+          onChange={(e) => setBing(e.target.value)}
+          placeholder="ABCDEF1234..."
+          className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-mono text-sm focus:outline-none focus:bg-acid-yellow"
+        />
+      </div>
+      <div>
+        <label className="block font-display text-sm text-ink mb-1">Plausible domain (optional)</label>
+        <input
+          value={plausible}
+          onChange={(e) => setPlausible(e.target.value)}
+          placeholder="catscandance.com"
+          className="w-full bg-cream text-ink border-4 border-ink px-3 py-2 font-mono text-sm focus:outline-none focus:bg-acid-yellow"
+        />
+      </div>
+      <div className="sm:col-span-3">
+        <button
+          onClick={() =>
+            onSave({
+              google: google.trim() || undefined,
+              bing: bing.trim() || undefined,
+              plausible_domain: plausible.trim() || undefined,
+            })
+          }
+          className="bg-ink text-cream font-display px-5 py-2 hover:bg-magenta transition-colors"
+        >
+          SAVE VERIFICATION
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default Admin;
+
+// ============= CURATED EVENTS TAB =============
+type CuratedRow = {
+  id?: string;
+  title: string;
+  venue: string;
+  event_date: string;
+  event_time: string;
+  url: string;
+  source: string;
+  blurb: string;
+  genre: string[];
+  is_featured: boolean;
+  image_url?: string | null;
+  city?: string;
+};
+
+const emptyCurated = (): CuratedRow => ({
+  title: "", venue: "", event_date: "", event_time: "",
+  url: "", source: "manual", blurb: "", genre: [], is_featured: false,
+  image_url: "",
+});
+
+// ── Storage Test Panel ──────────────────────────────────────────────────────
+type StorageStatus = {
+  service_key_set: boolean;
+  bucket_exists: boolean;
+  bucket_public: boolean;
+  signed_url_works: boolean;
+  error: string | null;
+};
+
+function StorageTestPanel({ pwd, onSetup }: { pwd: string; onSetup: () => void }) {
+  const [status, setStatus]     = useState<StorageStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [testResult, setTestResult] = useState<{ url: string; ok: boolean; msg: string } | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const runCheck = async () => {
+    setChecking(true);
+    setStatus(null);
+    setTestResult(null);
+    try {
+      const r = await fetch("/api/admin/test-storage", {
+        headers: { "x-admin-password": pwd },
+      });
+      const data = await r.json();
+      setStatus(data);
+    } catch (e: any) {
+      setStatus({ service_key_set: false, bucket_exists: false, bucket_public: false, signed_url_works: false, error: e.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const runUploadTest = async (file: File) => {
+    setUploading(true);
+    setTestResult(null);
+    try {
+      // Step 1: get signed URL
+      const signRes = await fetch("/api/admin/upload-poster", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({
+          slug: "upload-test",
+          ext: file.name.split(".").pop() ?? "jpg",
+          mimeType: file.type || "image/jpeg",
+        }),
+      });
+      const signData = await signRes.json();
+      if (!signRes.ok) {
+        setTestResult({ url: "", ok: false, msg: `❌ Sign step failed (${signRes.status}): ${signData?.error ?? "unknown"}` });
+        return;
+      }
+
+      // Step 2: PUT directly to Supabase
+      const { signedUrl, publicUrl } = signData as { signedUrl: string; publicUrl: string };
+      const putRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        const errText = await putRes.text().catch(() => "unknown");
+        setTestResult({ url: "", ok: false, msg: `❌ Upload step failed (${putRes.status}): ${errText.slice(0, 200)}` });
+        return;
+      }
+
+      // Step 3: verify the public URL actually loads
+      const imgRes = await fetch(publicUrl, { method: "HEAD" }).catch(() => null);
+      const accessible = imgRes?.ok ?? false;
+
+      setTestResult({
+        url: publicUrl,
+        ok: true,
+        msg: accessible
+          ? "✅ Full flow passed! Signed URL ✓ · Upload ✓ · Public URL accessible ✓"
+          : "⚠️ Upload succeeded but public URL returned non-200. Check bucket is set to public.",
+      });
+    } catch (e: any) {
+      setTestResult({ url: "", ok: false, msg: `❌ Exception: ${e.message}` });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const dot = (ok: boolean | undefined) =>
+    ok ? <span className="text-lime font-bold">●</span> : <span className="text-magenta font-bold">●</span>;
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      {/* Header row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-ink text-cream">
+        <div>
+          <p className="font-display text-sm uppercase">🪣 Storage Diagnostics</p>
+          <p className="text-cream/50 text-xs">Test the full image upload pipeline before going live</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={onSetup}
+            className="bg-acid-yellow text-ink font-display px-4 py-2 border-2 border-cream text-xs hover:bg-cream transition-colors"
+          >
+            CREATE BUCKET
+          </button>
+          <button
+            onClick={() => { setOpen(v => !v); if (!open) runCheck(); }}
+            className="bg-cream text-ink font-display px-4 py-2 border-2 border-cream text-xs hover:bg-acid-yellow transition-colors"
+          >
+            {open ? "HIDE" : "▶ RUN TESTS"}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="p-5 space-y-5">
+          {/* Status checks */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-display text-sm text-ink uppercase">System Checks</p>
+              <button
+                onClick={runCheck}
+                disabled={checking}
+                className="font-display text-xs uppercase bg-cream text-ink border-2 border-ink px-3 py-1 hover:bg-acid-yellow transition-colors disabled:opacity-60"
+              >
+                {checking ? "CHECKING…" : "↻ RECHECK"}
+              </button>
+            </div>
+
+            {checking && (
+              <div className="space-y-2">
+                {["SUPABASE_SERVICE_KEY set", "Bucket exists", "Bucket is public", "Signed URL works"].map(l => (
+                  <div key={l} className="flex items-center gap-3 border-2 border-ink/20 px-4 py-2">
+                    <span className="text-ink/30 font-bold animate-pulse">●</span>
+                    <span className="text-ink/50 text-sm font-display uppercase">{l}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {status && !checking && (
+              <div className="space-y-2">
+                {[
+                  { label: "SUPABASE_SERVICE_KEY set",  ok: status.service_key_set },
+                  { label: "Bucket 'event-posters' exists", ok: status.bucket_exists },
+                  { label: "Bucket is public",           ok: status.bucket_public },
+                  { label: "Signed URL generation works", ok: status.signed_url_works },
+                ].map(({ label, ok }) => (
+                  <div key={label} className={`flex items-center gap-3 border-2 px-4 py-2 ${ok ? "border-lime/60 bg-lime/10" : "border-magenta/40 bg-magenta/5"}`}>
+                    {dot(ok)}
+                    <span className="text-ink text-sm font-display uppercase flex-1">{label}</span>
+                    <span className={`text-xs font-display ${ok ? "text-lime" : "text-magenta"}`}>{ok ? "PASS" : "FAIL"}</span>
+                  </div>
+                ))}
+                {status.error && (
+                  <div className="border-2 border-magenta bg-magenta/10 px-4 py-3 mt-2">
+                    <p className="font-display text-xs uppercase text-magenta mb-1">Error Detail</p>
+                    <p className="text-ink text-sm font-mono break-all">{status.error}</p>
+                  </div>
+                )}
+                {status.bucket_exists && !status.bucket_public && (
+                  <div className="border-2 border-acid-yellow bg-acid-yellow/20 px-4 py-2 text-sm">
+                    <strong className="font-display text-xs uppercase">Fix: </strong>
+                    Bucket is private. In Supabase dashboard → Storage → event-posters → Edit → toggle <strong>Public bucket</strong> ON.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Live upload test */}
+          <div className="border-4 border-ink p-4 space-y-3">
+            <p className="font-display text-sm text-ink uppercase">Live Upload Test</p>
+            <p className="text-ink/60 text-xs">
+              Pick any image — it runs the full real flow: sign → PUT to Supabase → verify public URL.
+              A small test file is uploaded to the <code className="bg-ink/10 px-1">event-posters</code> bucket.
             </p>
-            <button onClick={() => setMagicSent(false)} className="mt-4 font-display text-sm text-magenta underline">
-              Try again
+
+            <label className={`inline-flex items-center gap-2 font-display text-sm px-5 py-2 border-4 border-ink chunk-shadow transition-transform cursor-pointer
+              ${uploading ? "opacity-60 cursor-not-allowed" : "bg-acid-yellow text-ink hover:translate-x-1 hover:translate-y-1 hover:shadow-none"}`}>
+              {uploading ? "⏳ UPLOADING…" : "📎 PICK IMAGE & TEST"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) runUploadTest(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
+            {testResult && (
+              <div className={`border-4 p-4 space-y-3 ${testResult.ok ? "border-lime bg-lime/10" : "border-magenta bg-magenta/5"}`}>
+                <p className="font-display text-sm text-ink">{testResult.msg}</p>
+                {testResult.ok && testResult.url && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-ink/60 font-mono break-all">{testResult.url}</p>
+                    <img
+                      src={testResult.url}
+                      alt="upload test result"
+                      className="h-32 border-4 border-ink object-contain bg-ink/5"
+                      onLoad={() => {}}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                        setTestResult(r => r ? { ...r, msg: r.msg + " (⚠️ image loaded but not renderable in browser — check bucket CORS settings)." } : r);
+                      }}
+                    />
+                    <a
+                      href={testResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-2 border-ink hover:bg-magenta transition-colors"
+                    >
+                      OPEN IN NEW TAB ↗
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick help */}
+          <details className="border-2 border-ink/20">
+            <summary className="font-display text-xs uppercase text-ink/60 px-4 py-2 cursor-pointer hover:bg-acid-yellow/20 transition-colors">
+              ℹ️ What to do if tests fail
+            </summary>
+            <div className="px-4 py-3 space-y-2 text-sm text-ink/70">
+              <p><strong className="text-ink">SERVICE_KEY not set</strong> → Vercel dashboard → Settings → Environment Variables → add <code className="bg-ink/10 px-1">SUPABASE_SERVICE_KEY</code> (service_role key from Supabase → Settings → API) → redeploy.</p>
+              <p><strong className="text-ink">Bucket doesn't exist</strong> → Click <strong>CREATE BUCKET</strong> above. Or create it manually in Supabase → Storage → New bucket named <code className="bg-ink/10 px-1">event-posters</code>, Public = on.</p>
+              <p><strong className="text-ink">Bucket not public</strong> → Supabase → Storage → event-posters → Edit → Public bucket = ON → Save.</p>
+              <p><strong className="text-ink">Signed URL fails</strong> → Usually means the service key is wrong or expired. Regenerate it in Supabase → Settings → API → Regenerate service_role key → update Vercel env var.</p>
+              <p><strong className="text-ink">Upload works but image won't show</strong> → Supabase → Storage → event-posters → Policies → ensure there's a public read policy (SELECT for public role).</p>
+            </div>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── District JSON Import ────────────────────────────────────────────────────
+// ── Lineup Manager (per curated event) ─────────────────────────────────────
+interface LineupRow {
+  id?: string;
+  curated_event_id: string;
+  artist_name: string;
+  artist_slug?: string;
+  role: string;
+  set_time?: string;
+  sort_order: number;
+  is_featured: boolean;
+}
+
+const LINEUP_ROLES = ["headliner", "performer", "b2b", "support", "live", "dj"];
+
+function LineupManager({ event, pwd, onClose }: { event: CuratedRow; pwd: string; onClose: () => void }) {
+  const [lineup, setLineup] = useState<LineupRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<Partial<LineupRow>>({ role: "performer", sort_order: 0, is_featured: false });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/event-artist-lineups?curated_event_id=${event.id}`, {
+        headers: { "x-admin-password": pwd },
+      });
+      if (res.ok) setLineup(await res.json());
+    } catch { /* skip */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { if (event.id) load(); }, [event.id]);
+
+  const add = async () => {
+    if (!draft.artist_name?.trim()) { toast.error("Artist name required"); return; }
+    if (!event.id) { toast.error("Save event first"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/event-artist-lineups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({
+          curated_event_id: event.id,
+          artist_name: draft.artist_name.trim(),
+          artist_slug: draft.artist_slug?.trim() || null,
+          role: draft.role || "performer",
+          set_time: draft.set_time?.trim() || null,
+          sort_order: lineup.length,
+          is_featured: draft.is_featured ?? false,
+          source: "manual",
+        }),
+      });
+      if (res.ok) {
+        toast.success("Artist added");
+        setDraft({ role: "performer", sort_order: 0, is_featured: false });
+        load();
+      } else {
+        toast.error("Failed to add");
+      }
+    } finally { setSaving(false); }
+  };
+
+  const remove = async (id: string) => {
+    const res = await fetch(`/api/event-artist-lineups?id=${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-password": pwd },
+    });
+    if (res.ok) { toast.success("Removed"); load(); }
+    else toast.error("Failed");
+  };
+
+  const toggleFeatured = async (row: LineupRow) => {
+    const res = await fetch(`/api/event-artist-lineups?id=${row.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ is_featured: !row.is_featured }),
+    });
+    if (res.ok) load();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+      <div className="bg-cream border-4 border-ink w-full max-w-2xl max-h-[90vh] overflow-y-auto chunk-shadow">
+        {/* Header */}
+        <div className="sticky top-0 bg-ink text-cream px-6 py-4 flex items-center justify-between border-b-4 border-ink">
+          <div>
+            <p className="font-display text-xs uppercase text-cream/50">Lineup</p>
+            <h3 className="font-display text-xl uppercase truncate">{event.title}</h3>
+          </div>
+          <button onClick={onClose} className="font-display text-xs uppercase bg-cream text-ink px-4 py-2 border-2 border-cream hover:bg-acid-yellow transition-colors">
+            Close
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Existing lineup */}
+          <div>
+            <p className="font-display text-sm uppercase text-ink mb-3">Current Lineup ({lineup.length})</p>
+            {loading ? (
+              <div className="h-20 bg-ink/5 animate-pulse border-4 border-ink" />
+            ) : lineup.length === 0 ? (
+              <p className="text-ink/40 text-sm font-display uppercase border-4 border-dashed border-ink/20 p-4 text-center">
+                No artists added yet
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {lineup
+                  .slice()
+                  .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                  .map((row) => (
+                    <div key={row.id} className="flex items-center gap-3 border-4 border-ink bg-cream p-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display text-sm text-ink uppercase">{row.artist_name}</p>
+                        <p className="text-xs text-ink/60">
+                          {row.role}{row.set_time ? ` · ${row.set_time}` : ""}{row.artist_slug ? ` · /${row.artist_slug}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleFeatured(row)}
+                        className={`font-display text-[10px] uppercase px-2 py-1 border-2 border-ink transition-colors ${row.is_featured ? "bg-acid-yellow text-ink" : "bg-cream text-ink/50 hover:bg-acid-yellow"}`}
+                      >
+                        {row.is_featured ? "★ Headliner" : "Headliner?"}
+                      </button>
+                      {row.id && (
+                        <button onClick={() => remove(row.id!)} className="font-display text-[10px] uppercase px-2 py-1 border-2 border-magenta text-magenta hover:bg-magenta hover:text-cream transition-colors">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add artist form */}
+          <div className="border-4 border-ink p-5 space-y-3">
+            <p className="font-display text-sm uppercase text-ink">Add Artist</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Artist Name *</label>
+                <input
+                  value={draft.artist_name || ""}
+                  onChange={e => setDraft(d => ({ ...d, artist_name: e.target.value }))}
+                  placeholder="e.g. Kohra"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Artist Slug (from /artists/)</label>
+                <input
+                  value={draft.artist_slug || ""}
+                  onChange={e => setDraft(d => ({ ...d, artist_slug: e.target.value }))}
+                  placeholder="e.g. kohra"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Role</label>
+                <select
+                  value={draft.role || "performer"}
+                  onChange={e => setDraft(d => ({ ...d, role: e.target.value }))}
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-sm focus:outline-none"
+                >
+                  {LINEUP_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Set Time</label>
+                <input
+                  value={draft.set_time || ""}
+                  onChange={e => setDraft(d => ({ ...d, set_time: e.target.value }))}
+                  placeholder="e.g. 10 PM – 12 AM"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 font-display text-xs uppercase text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.is_featured ?? false}
+                onChange={e => setDraft(d => ({ ...d, is_featured: e.target.checked }))}
+                className="w-4 h-4 accent-magenta"
+              />
+              Mark as headliner
+            </label>
+            <button
+              onClick={add}
+              disabled={saving}
+              className="bg-magenta text-cream font-display text-sm uppercase px-6 py-2.5 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {saving ? "Adding…" : "+ Add Artist"}
             </button>
           </div>
-        ) : mode === "password" ? (
-          <form onSubmit={signInWithPassword}>
-            <label className="font-display text-sm text-ink mb-1 block">EMAIL</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
-              className="w-full border-4 border-ink px-4 py-3 font-medium mb-3 focus:outline-none focus:bg-acid-yellow" />
-            <label className="font-display text-sm text-ink mb-1 block">PASSWORD</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow" />
-            <button type="submit" disabled={loading}
-              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
-              {loading ? "SIGNING IN..." : "SIGN IN →"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DistrictJsonImport({ pwd, onImported }: { pwd: string; onImported: () => void }) {
+  const [open, setOpen]       = useState(false);
+  const [jsonText, setJsonText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult]   = useState<string | null>(null);
+
+  const doImport = async () => {
+    setResult(null);
+    let parsed: any[];
+    try {
+      parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) throw new Error("Must be a JSON array");
+    } catch (e: any) {
+      toast.error(`Invalid JSON: ${e.message}`);
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await fetch("/api/admin/import-district-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({ events: parsed }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult(`✓ Imported ${data.upserted} of ${data.total} events (${data.skipped} skipped / already exist)`);
+        toast.success(`District import done: ${data.upserted} upserted`);
+        setJsonText("");
+        onImported();
+      } else {
+        toast.error(data.error ?? "Import failed");
+      }
+    } catch {
+      toast.error("Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors"
+      >
+        <span>📥 Import District JSON</span>
+        <span className="text-ink/40">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t-4 border-ink p-5 space-y-3">
+          <p className="text-sm text-ink/60">
+            Paste a JSON array of District events. Each object needs at minimum: <code className="bg-ink/10 px-1">title</code>, <code className="bg-ink/10 px-1">url</code>. Optional: <code className="bg-ink/10 px-1">event_date</code>, <code className="bg-ink/10 px-1">city</code>, <code className="bg-ink/10 px-1">venue</code>, <code className="bg-ink/10 px-1">genre</code> (array).
+          </p>
+          <textarea
+            rows={8}
+            value={jsonText}
+            onChange={e => setJsonText(e.target.value)}
+            placeholder={'[\n  {\n    "title": "Boiler Room Delhi",\n    "url": "https://district.in/event/...",\n    "event_date": "2026-07-05",\n    "city": "Delhi",\n    "venue": "Studio 326",\n    "genre": ["Techno", "House"]\n  }\n]'}
+            className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-mono text-xs focus:outline-none focus:bg-acid-yellow resize-y"
+          />
+          {result && <p className="font-display text-sm text-ink">{result}</p>}
+          <button
+            onClick={doImport}
+            disabled={importing || !jsonText.trim()}
+            className="bg-electric-blue text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+          >
+            {importing ? "IMPORTING…" : "IMPORT EVENTS"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pending Promoter Submissions ────────────────────────────────────────────
+function PendingSubmissions({ pwd, onApproved }: { pwd: string; onApproved: () => void }) {
+  const [open, setOpen]       = useState(false);
+  const [pending, setPending] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/pending-events", {
+        headers: { "x-admin-password": pwd },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPending(data.events ?? []);
+      }
+    } catch { /* skip */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (open) loadPending();
+  }, [open]);
+
+  const approve = async (id: string) => {
+    const res = await fetch("/api/admin/pending-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ id, action: "approve" }),
+    });
+    if (res.ok) {
+      toast.success("Event approved and published");
+      setPending(p => p.filter(e => e.id !== id));
+      onApproved();
+    } else {
+      toast.error("Approve failed");
+    }
+  };
+
+  const reject = async (id: string) => {
+    if (!confirm("Reject and delete this submission?")) return;
+    const res = await fetch("/api/admin/pending-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ id, action: "reject" }),
+    });
+    if (res.ok) {
+      toast.success("Submission rejected");
+      setPending(p => p.filter(e => e.id !== id));
+    } else {
+      toast.error("Reject failed");
+    }
+  };
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors"
+      >
+        <span>⏳ Pending Promoter Submissions</span>
+        <span className="text-ink/40">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t-4 border-ink p-5">
+          {loading ? (
+            <div className="animate-pulse h-16 bg-ink/5" />
+          ) : pending.length === 0 ? (
+            <p className="text-ink/50 font-display text-sm uppercase">No pending submissions</p>
+          ) : (
+            <div className="space-y-3">
+              {pending.map((ev: any) => (
+                <div key={ev.id} className="border-4 border-ink p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-sm text-ink uppercase">{ev.title}</p>
+                      <p className="text-xs text-ink/60">{ev.event_date} · {ev.city} · {ev.venue ?? "—"}</p>
+                      <p className="text-xs text-ink/50 mt-0.5">
+                        by <strong>{ev.promoter_slug ?? "unknown"}</strong> ·{" "}
+                        <a href={ev.url} target="_blank" rel="noreferrer" className="underline">View event ↗</a>
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => approve(ev.id)}
+                        className="font-display text-xs uppercase bg-lime text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors"
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => reject(ev.id)}
+                        className="font-display text-xs uppercase bg-cream text-magenta px-3 py-1.5 border-2 border-magenta hover:bg-magenta hover:text-cream transition-colors"
+                      >
+                        ✗ Reject
+                      </button>
+                    </div>
+                  </div>
+                  {ev.blurb && <p className="text-xs text-ink/60 italic">"{ev.blurb}"</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CURATED_SOURCES = [
+  { key: "skillboxes", label: "Skillbox" },
+  { key: "sortmyscene", label: "SortMyScene" },
+  { key: "insider", label: "Insider" },
+  { key: "district", label: "District" },
+  { key: "highape", label: "HighApe" },
+  { key: "bookmyshow", label: "BookMyShow" },
+] as const;
+
+const CURATED_CITIES = [
+  { key: "bangalore", label: "Bangalore" },
+  { key: "mumbai", label: "Mumbai" },
+  { key: "delhi", label: "Delhi" },
+  { key: "pune", label: "Pune" },
+  { key: "hyderabad", label: "Hyderabad" },
+  { key: "chennai", label: "Chennai" },
+  { key: "kochi", label: "Kochi" },
+  { key: "jaipur", label: "Jaipur" },
+  { key: "indore", label: "Indore" },
+  { key: "ranchi", label: "Ranchi" },
+  { key: "shillong", label: "Shillong" },
+  { key: "all", label: "All Cities" },
+] as const;
+
+function CuratedEventsTab() {
+  const [rows, setRows] = useState<CuratedRow[]>([]);
+  const [draft, setDraft] = useState<CuratedRow>(emptyCurated());
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [crawlSource, setCrawlSource] = useState<string>("skillboxes");
+  const [crawlCity, setCrawlCity] = useState<string>("bangalore");
+  const [lastRun, setLastRun] = useState<any>(null);
+  const [filterSource, setFilterSource] = useState<string>("all");
+  const [filterCity, setFilterCity] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("date-asc");
+  const [lineupEvent, setLineupEvent] = useState<CuratedRow | null>(null);
+  const [draftUploading, setDraftUploading] = useState(false);
+  // per-row uploading state: keyed by row id
+  const [rowUploading, setRowUploading] = useState<Record<string, boolean>>({});
+
+  const projectUrl = "/api";
+  const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+
+  /** Shared signed-URL upload helper — works for both the draft form and existing rows */
+  const uploadCuratedImage = async (file: File, slug: string): Promise<string> => {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const signRes = await fetch(`${projectUrl}/admin/upload-poster`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ slug: slug || `curated-${Date.now()}`, ext, mimeType: file.type || "image/jpeg" }),
+    });
+    const signData = await signRes.json();
+    if (!signRes.ok) throw new Error(signData?.error ?? "Could not get upload URL");
+
+    const { signedUrl, publicUrl } = signData as { signedUrl: string; publicUrl: string };
+
+    const uploadRes = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => "upload error");
+      throw new Error(errText);
+    }
+    return publicUrl;
+  };
+
+  const headers = {
+    "x-admin-password": pwd,
+    "Content-Type": "application/json",
+    apikey: "",
+    Authorization: `Bearer ${""}`,
+  };
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${projectUrl}/admin/curated-events`, { headers });
+      const data = await res.json();
+      if (res.ok) {
+        setRows(data.events ?? []);
+      } else {
+        toast.error(data?.error ?? "Could not load curated events");
+      }
+    } catch (e) {
+      toast.error("Could not load curated events");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const upsert = async (row: CuratedRow) => {
+    if (!row.title || !row.url) { toast.error("Title and URL are required"); return; }
+    const res = await fetch(`${projectUrl}/admin/curated-events`, {
+      method: "POST", headers,
+      body: JSON.stringify({ action: "upsert", payload: row }),
+    });
+    if (res.ok) { toast.success("Saved"); setDraft(emptyCurated()); load(); }
+    else toast.error("Save failed");
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm("Delete this curated event?")) return;
+    const res = await fetch(`${projectUrl}/admin/curated-events`, {
+      method: "POST", headers,
+      body: JSON.stringify({ action: "delete", payload: { id } }),
+    });
+    if (res.ok) { toast.success("Deleted"); load(); }
+    else toast.error("Delete failed");
+  };
+
+  const refreshFromWeb = async () => {
+    setRefreshing(true);
+    setLastRun(null);
+    try {
+      const res = await fetch(`${projectUrl}/admin/enrich-artists`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${""}` },
+        body: JSON.stringify({ source: crawlSource, city: crawlCity, mode: "single", limit: 10 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLastRun(data);
+        toast.success(`Upserted ${data.upserted ?? 0} from ${crawlSource}/${crawlCity}`);
+        load();
+      } else {
+        toast.error(data.error ?? "Refresh failed");
+      }
+    } catch {
+      toast.error("Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const runFullNightly = async () => {
+    if (!confirm("Run the full nightly scraper now? This crawls Skillbox, District, Insider and HighApe — may take 2–5 minutes.")) return;
+    setRefreshing(true);
+    setLastRun(null);
+    try {
+      // Call the ACTUAL cron handler, not the stub
+      const res = await fetch(`/api/cron/scrape-events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Scraper complete: ${data.upserted ?? 0} new events upserted (scored ${data.accepted ?? 0} of ${data.scraped ?? 0} scraped)`);
+        setLastRun({ log: data.log ?? [], upserted: data.upserted ?? 0, scraped: data.scraped ?? 0, accepted: data.accepted ?? 0 });
+        load();
+      } else {
+        toast.error(data.error ?? "Scraper failed");
+      }
+    } catch {
+      toast.error("Scraper timed out — it may still be running server-side. Check back in a few minutes.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const setupStorage = async () => {
+    try {
+      const r = await fetch(`${projectUrl}/admin/setup-storage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({}),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        toast.success(data.message ?? `✓ Storage bucket '${data.bucket ?? "event-posters"}' is ready!`);
+      } else {
+        toast.error(data.error ?? "Setup failed");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Setup failed");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Lineup manager modal */}
+      {lineupEvent && (
+        <LineupManager
+          event={lineupEvent}
+          pwd={pwd}
+          onClose={() => setLineupEvent(null)}
+        />
+      )}
+
+      {/* Storage health + test panel */}
+      <StorageTestPanel pwd={pwd} onSetup={setupStorage} />
+
+      <div className="flex flex-wrap justify-between items-end gap-3">
+        <div>
+          <h3 className="font-display text-2xl text-ink">CURATED EVENTS</h3>
+          <p className="text-ink/70 font-medium text-sm">
+            Events on /discover. Add manually, run the scraper (Skillbox/District/Insider/HighApe — needs ANTHROPIC_API_KEY for scoring), or import a District JSON dump.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select
+            value={crawlSource}
+            onChange={(e) => setCrawlSource(e.target.value)}
+            disabled={refreshing}
+            className="border-4 border-ink bg-cream text-ink font-display px-3 py-2"
+          >
+            {CURATED_SOURCES.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
+          <select
+            value={crawlCity}
+            onChange={(e) => setCrawlCity(e.target.value)}
+            disabled={refreshing}
+            className="border-4 border-ink bg-cream text-ink font-display px-3 py-2"
+          >
+            {CURATED_CITIES.map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={refreshFromWeb}
+            disabled={refreshing}
+            className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+          >
+            {refreshing ? "CRAWLING…" : "🔄 REFRESH SOURCE"}
+          </button>
+          <button
+            onClick={runFullNightly}
+            disabled={refreshing}
+            className="bg-magenta text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+          >
+            {refreshing ? "RUNNING…" : "🌙 RUN NIGHTLY NOW"}
+          </button>
+        </div>
+      </div>
+
+      {lastRun?.runs?.length > 0 && (
+        <div className="bg-cream border-4 border-ink p-4 space-y-2 text-sm">
+          {lastRun.runs?.map((r: any, i: number) => (
+            <div key={i} className="font-mono text-ink">
+              <strong>{r.source}</strong> — candidates: {r.candidateLinks} · scraped: {r.scrapedPages} · extracted: {r.extracted} · saved: <strong>{r.upserted}</strong>
+              {r.errors?.length > 0 && (
+                <div className="text-magenta text-xs mt-1">errors: {r.errors.join(" | ")}</div>
+              )}
+              {r.samples?.length > 0 && r.upserted === 0 && (
+                <div className="text-ink/60 text-xs mt-1">candidates seen: {r.samples.slice(0, 3).join(", ")}</div>
+              )}
+            </div>
+          ))}
+          {lastRun.log?.map((line: string, i: number) => (
+            <div key={i} className="font-mono text-ink/70 text-xs">{line}</div>
+          ))}
+          {lastRun.upserted !== undefined && (
+            <div className="font-mono text-ink font-bold">
+              ✓ Done — {lastRun.upserted} new events upserted ({lastRun.accepted} accepted from {lastRun.scraped} scraped)
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── District JSON Import ── */}
+      <DistrictJsonImport pwd={pwd} onImported={load} />
+
+      {/* ── Pending Promoter Submissions ── */}
+      <PendingSubmissions pwd={pwd} onApproved={load} />
+
+      <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-3">
+        <h4 className="font-display text-xl text-ink">ADD MANUALLY</h4>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Title *" value={draft.title} onChange={(v) => setDraft({ ...draft, title: v })} />
+          <Field label="URL *" value={draft.url} onChange={(v) => setDraft({ ...draft, url: v })} />
+          <Field label="Venue" value={draft.venue} onChange={(v) => setDraft({ ...draft, venue: v })} />
+          <Field label="Date (YYYY-MM-DD)" value={draft.event_date} onChange={(v) => setDraft({ ...draft, event_date: v })} />
+          <Field label="Time" value={draft.event_time} onChange={(v) => setDraft({ ...draft, event_time: v })} />
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Source</label>
+            <select
+              value={draft.source}
+              onChange={(e) => setDraft({ ...draft, source: e.target.value })}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-display focus:outline-none focus:bg-acid-yellow"
+            >
+              <option value="manual">CCD Pick</option>
+              <option value="skillboxes">Skillbox</option>
+              <option value="district">District</option>
+              <option value="insider">Insider</option>
+              <option value="sortmyscene">SortMyScene</option>
+              <option value="paytm-insider">Paytm Insider</option>
+            </select>
+          </div>
+          <Field
+            label="Genres (comma-separated)"
+            value={draft.genre.join(", ")}
+            onChange={(v) => setDraft({ ...draft, genre: v.split(",").map((s) => s.trim()).filter(Boolean) })}
+          />
+        </div>
+        <div>
+          <label className="block font-display text-sm text-ink mb-1">Blurb</label>
+          <textarea
+            rows={2}
+            value={draft.blurb}
+            onChange={(e) => setDraft({ ...draft, blurb: e.target.value })}
+            className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+          />
+        </div>
+        {/* Image URL + upload */}
+        <div>
+          <label className="block font-display text-sm text-ink mb-1">
+            Flyer / Image
+            <span className="text-ink/40 font-normal text-xs ml-2">paste URL or upload file</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="url"
+              placeholder="https://..."
+              value={draft.image_url ?? ""}
+              onChange={(e) => setDraft({ ...draft, image_url: e.target.value || null })}
+              className="flex-1 min-w-[200px] bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+            <label className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform cursor-pointer text-sm">
+              {draftUploading ? "UPLOADING…" : "📤 UPLOAD"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={draftUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  setDraftUploading(true);
+                  try {
+                    const url = await uploadCuratedImage(file, draft.title || `curated-${Date.now()}`);
+                    setDraft((d) => ({ ...d, image_url: url }));
+                    toast.success("Image uploaded — click ADD to save");
+                  } catch (err: any) {
+                    toast.error(err?.message ?? "Upload failed");
+                  } finally {
+                    setDraftUploading(false);
+                  }
+                }}
+              />
+            </label>
+            {draft.image_url && (
+              <img src={draft.image_url} alt="preview" className="h-12 w-10 object-cover border-2 border-ink shrink-0" />
+            )}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 font-medium text-ink">
+          <input
+            type="checkbox"
+            checked={draft.is_featured}
+            onChange={(e) => setDraft({ ...draft, is_featured: e.target.checked })}
+          />
+          Feature this event
+        </label>
+        <button onClick={() => upsert(draft)} className="bg-ink text-cream font-display px-5 py-2 hover:bg-magenta transition-colors">
+          ADD CURATED EVENT
+        </button>
+      </div>
+
+      {(() => {
+        const visible = rows
+          .filter((r) => filterSource === "all" || r.source === filterSource)
+          .filter((r) => filterCity === "all" || (r as any).city === filterCity)
+          .slice()
+          .sort((a, b) => {
+            const da = a.event_date || "9999-12-31";
+            const db = b.event_date || "9999-12-31";
+            switch (sortBy) {
+              case "date-desc": return db.localeCompare(da);
+              case "source": return (a.source || "").localeCompare(b.source || "");
+              case "city": return ((a as any).city || "").localeCompare((b as any).city || "");
+              case "featured": return Number(!!b.is_featured) - Number(!!a.is_featured);
+              case "date-asc":
+              default: return da.localeCompare(db);
+            }
+          });
+        return (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="border-4 border-ink bg-cream text-ink font-display px-3 py-2">
+                <option value="all">All sources</option>
+                {CURATED_SOURCES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                <option value="manual">CCD Pick</option>
+              </select>
+              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className="border-4 border-ink bg-cream text-ink font-display px-3 py-2">
+                {CURATED_CITIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="border-4 border-ink bg-cream text-ink font-display px-3 py-2">
+                <option value="date-asc">Sort: Date ↑</option>
+                <option value="date-desc">Sort: Date ↓</option>
+                <option value="source">Sort: Source</option>
+                <option value="city">Sort: City</option>
+                <option value="featured">Sort: Featured first</option>
+              </select>
+              <p className="text-ink/70 font-medium text-sm ml-auto">
+                {visible.length} of {rows.length} event{rows.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            {loading && <p className="text-ink/60">Loading…</p>}
+            {visible.map((r) => (
+              <div key={r.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap gap-3">
+                {/* Thumbnail */}
+                {r.image_url && (
+                  <img src={r.image_url} alt="" className="h-16 w-12 object-cover border-2 border-ink shrink-0 self-start" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-lg text-ink">{r.title}</p>
+                  <p className="text-ink/70 text-sm">
+                    {r.source} · {(r as any).city || "—"} · {r.event_date || "no date"} {r.event_time && `· ${r.event_time}`} {r.venue && `· ${r.venue}`}
+                    {r.is_featured && " · ⭐"}
+                  </p>
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-magenta text-xs underline break-all">{r.url}</a>
+                  {/* Inline image_url editor */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <input
+                      type="url"
+                      placeholder="Image URL…"
+                      value={r.image_url ?? ""}
+                      onChange={(e) => {
+                        const updated = { ...r, image_url: e.target.value || null };
+                        setRows((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                      }}
+                      className="flex-1 min-w-[160px] bg-cream text-ink border-2 border-ink px-2 py-1 text-xs font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                    <label className="bg-cream text-ink font-display px-2 py-1 border-2 border-ink text-xs hover:bg-acid-yellow transition-colors cursor-pointer shrink-0">
+                      {rowUploading[r.id!] ? "…" : "📤 IMG"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={!!rowUploading[r.id!]}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !r.id) return;
+                          e.target.value = "";
+                          setRowUploading((prev) => ({ ...prev, [r.id!]: true }));
+                          try {
+                            const url = await uploadCuratedImage(file, r.title || r.id!);
+                            const updated = { ...r, image_url: url };
+                            setRows((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                            await upsert(updated);
+                          } catch (err: any) {
+                            toast.error(err?.message ?? "Upload failed");
+                          } finally {
+                            setRowUploading((prev) => ({ ...prev, [r.id!]: false }));
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => upsert(r)}
+                      className="bg-ink text-cream font-display px-2 py-1 text-xs hover:bg-magenta transition-colors shrink-0"
+                    >
+                      SAVE
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 items-start">
+                  <button
+                    onClick={() => upsert({ ...r, is_featured: !r.is_featured })}
+                    className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink"
+                  >
+                    {r.is_featured ? "UNFEATURE" : "FEATURE"}
+                  </button>
+                  <button
+                    onClick={() => r.id && setLineupEvent(r)}
+                    className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink"
+                    title="Manage lineup"
+                  >
+                    🎛 LINEUP
+                  </button>
+                  <button onClick={() => r.id && remove(r.id)} className="bg-destructive text-cream font-display px-4 py-2">DELETE</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+
+// ============= BLOG TAB =============
+type WizardStep = 1 | 2 | 3;
+
+const CATEGORIES: Category[] = ["GUIDES", "CULTURE", "ARTISTS", "JOURNAL", "DROPS", "PETS"];
+
+const emptyDraft = (): DraftPost => ({
+  slug: "",
+  title: "",
+  excerpt: "",
+  category: "GUIDES",
+  coverTitle: "",
+  coverColor: "magenta",
+  tag: "",
+  tldr: [],
+  quickPicks: { title: "", items: [] },
+  pullQuote: "",
+  whatWedSkip: "",
+  body: [],
+  seoTitle: "",
+  metaDescription: "",
+  dateISO: new Date().toISOString().slice(0, 10),
+  author: "Cats Can Dance",
+});
+
+function BlogTab() {
+  const [step, setStep] = useState<WizardStep>(1);
+  const [category, setCategory] = useState<Category>("GUIDES");
+  const [seedTitle, setSeedTitle] = useState("");
+  const [seedKeyword, setSeedKeyword] = useState("");
+  const [seedAngle, setSeedAngle] = useState("");
+  const [draft, setDraft] = useState<DraftPost>(emptyDraft());
+  const [loading, setLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<DraftPost[]>([]);
+
+  const projectUrl = "/api";
+  const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+
+  const loadPublished = async () => {
+    try {
+      const res = await fetch(`${projectUrl}/admin/blog`, {
+        headers: {
+          "x-admin-password": pwd,
+          apikey: "",
+          Authorization: `Bearer ${""}`,
+        },
+      });
+      const data = await res.json();
+      const cms: DraftPost[] = res.ok ? (data.posts ?? []) : [];
+
+      // Merge in code-based static posts so they're editable too.
+      // Editing a static post and re-publishing creates a CMS override (same slug).
+      const mod = await import("@/content/posts");
+      const staticPosts = mod.posts as any[];
+      const cmsSlugs = new Set(cms.map((p) => p.slug));
+      const staticAsDrafts: DraftPost[] = staticPosts
+        .filter((p) => !cmsSlugs.has(p.slug))
+        .map((p) => ({
+          ...emptyDraft(),
+          slug: p.slug,
+          title: p.title,
+          excerpt: p.excerpt ?? "",
+          category: (p.category as Category) ?? "JOURNAL",
+          coverTitle: p.coverTitle ?? "",
+          coverColor: p.coverColor ?? "magenta",
+          tag: p.tag ?? "",
+          tldr: p.tldr ?? [],
+          quickPicks: p.quickPicks ?? { title: "", items: [] },
+          pullQuote: p.pullQuote ?? "",
+          whatWedSkip: p.whatWedSkip ?? "",
+          body: p.body ?? [],
+          date: p.date,
+          author: p.author,
+          dateISO: p.date ?? new Date().toISOString().slice(0, 10),
+        }));
+
+      setPublished([...cms, ...staticAsDrafts]);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const editPost = (p: DraftPost) => {
+    const next: DraftPost = {
+      ...emptyDraft(),
+      ...p,
+      tldr: Array.isArray(p.tldr) ? p.tldr : [],
+      body: Array.isArray(p.body) ? p.body : [],
+      quickPicks: p.quickPicks ?? { title: "", items: [] },
+    };
+    setDraft(next);
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.success(`Editing "${p.title}"`);
+  };
+
+  useEffect(() => {
+    loadPublished();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const generate = async (useInputs: boolean) => {
+    setLoading(true);
+    try {
+      const body: Record<string, unknown> = { category };
+      if (useInputs) {
+        if (seedTitle.trim()) body.title = seedTitle.trim();
+        if (seedKeyword.trim()) body.keyword = seedKeyword.trim();
+        if (seedAngle.trim()) body.angle = seedAngle.trim();
+      }
+      const res = await fetch(`${projectUrl}/admin/blog`, {
+        method: "POST",
+        headers: {
+          "x-admin-password": pwd,
+          "Content-Type": "application/json",
+          apikey: "",
+          Authorization: `Bearer ${""}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 429) {
+        toast.error("Rate limit hit. Wait a moment and try again.");
+        return;
+      }
+      if (res.status === 402) {
+        toast.error("AI credits exhausted. Top up at Settings → Workspace → Usage.");
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok || !data.post) {
+        toast.error(data.error ?? "Generation failed");
+        return;
+      }
+      const post = { ...emptyDraft(), ...data.post } as DraftPost;
+      post.tldr = Array.isArray(post.tldr) ? post.tldr : [];
+      post.body = Array.isArray(post.body) ? post.body : [];
+      post.quickPicks = post.quickPicks ?? { title: "", items: [] };
+      setDraft(post);
+      setStep(2);
+      toast.success("Draft generated");
+    } catch (e) {
+      toast.error("Generation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const publish = async () => {
+    if (!draft.slug || !draft.title) {
+      toast.error("Slug and title are required");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const res = await fetch(`${projectUrl}/admin/blog`, {
+        method: "POST",
+        headers: {
+          "x-admin-password": pwd,
+          "Content-Type": "application/json",
+          apikey: "",
+          Authorization: `Bearer ${""}`,
+        },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Publish failed");
+        return;
+      }
+      toast.success("Published");
+      setDraft(emptyDraft());
+      setSeedTitle("");
+      setSeedKeyword("");
+      setSeedAngle("");
+      setStep(1);
+      loadPublished();
+    } catch {
+      toast.error("Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const deletePost = async (slug: string) => {
+    if (!confirm(`Delete post "${slug}"?`)) return;
+    try {
+      const res = await fetch(
+        `${projectUrl}/admin/blog?action=delete&slug=${encodeURIComponent(slug)}`,
+        {
+          method: "POST",
+          headers: {
+            "x-admin-password": pwd,
+            apikey: "",
+            Authorization: `Bearer ${""}`,
+          },
+        }
+      );
+      if (res.ok) {
+        toast.success("Deleted");
+        loadPublished();
+      } else toast.error("Delete failed");
+    } catch {
+      toast.error("Delete failed");
+    }
+  };
+
+  const upd = (patch: Partial<DraftPost>) => setDraft((d) => ({ ...d, ...patch }));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 mb-2">
+        {[1, 2, 3].map((n) => (
+          <div
+            key={n}
+            className={`px-4 py-2 border-4 border-ink font-display ${
+              step === n ? "bg-ink text-cream" : "bg-cream text-ink/60"
+            }`}
+          >
+            {n}. {n === 1 ? "COMPOSE" : n === 2 ? "PREVIEW & EDIT" : "PUBLISH"}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-4">
+          <h3 className="font-display text-2xl text-ink">GENERATE A DRAFT</h3>
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Category *</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as Category)}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-display focus:outline-none focus:bg-acid-yellow"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Field label="Title (optional)" value={seedTitle} onChange={setSeedTitle} />
+          <Field label="Keyword (optional)" value={seedKeyword} onChange={setSeedKeyword} />
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Angle (optional)</label>
+            <textarea
+              rows={2}
+              value={seedAngle}
+              onChange={(e) => setSeedAngle(e.target.value)}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button
+              onClick={() => generate(false)}
+              disabled={loading}
+              className="bg-ink text-cream font-display px-5 py-2 hover:bg-magenta transition-colors disabled:opacity-60"
+            >
+              {loading ? "GENERATING…" : "GENERATE FROM RESEARCH"}
             </button>
-            <button type="button" onClick={() => setMode("magic")} className="mt-3 w-full text-center font-display text-xs text-ink/50 hover:text-magenta">
-              Use magic link instead
+            <button
+              onClick={() => generate(true)}
+              disabled={loading}
+              className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {loading ? "GENERATING…" : "GENERATE WITH MY INPUTS"}
             </button>
-          </form>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-2xl text-ink">PREVIEW & EDIT</h3>
+            <button
+              onClick={() => setStep(1)}
+              className="bg-cream text-ink font-display px-4 py-1 border-2 border-ink hover:bg-acid-yellow"
+            >
+              ← BACK
+            </button>
+          </div>
+
+          <div className="border-4 border-ink p-4 bg-background">
+            <BlogCover category={draft.category} title={draft.coverTitle || draft.title} />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Slug" value={draft.slug} onChange={(v) => upd({ slug: v })} />
+            <div>
+              <label className="block font-display text-sm text-ink mb-1">Category</label>
+              <select
+                value={draft.category}
+                onChange={(e) => upd({ category: e.target.value as Category })}
+                className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-display focus:outline-none focus:bg-acid-yellow"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Field label="Title" value={draft.title} onChange={(v) => upd({ title: v })} />
+            <Field
+              label="Cover title"
+              value={draft.coverTitle}
+              onChange={(v) => upd({ coverTitle: v })}
+            />
+            <Field label="Tag" value={draft.tag} onChange={(v) => upd({ tag: v })} />
+            <Field label="Cover color" value={draft.coverColor} onChange={(v) => upd({ coverColor: v })} />
+            <Field label="Date (ISO)" value={draft.dateISO} onChange={(v) => upd({ dateISO: v })} />
+            <Field label="Author" value={draft.author ?? ""} onChange={(v) => upd({ author: v })} />
+          </div>
+
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Excerpt</label>
+            <textarea
+              rows={2}
+              value={draft.excerpt}
+              onChange={(e) => upd({ excerpt: e.target.value })}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">TL;DR (one per line)</label>
+            <textarea
+              rows={4}
+              value={(draft.tldr ?? []).join("\n")}
+              onChange={(e) =>
+                upd({ tldr: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })
+              }
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <Field
+            label="Quick picks title"
+            value={draft.quickPicks?.title ?? ""}
+            onChange={(v) => upd({ quickPicks: { ...draft.quickPicks, title: v } })}
+          />
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Quick picks items (one per line)</label>
+            <textarea
+              rows={4}
+              value={(draft.quickPicks?.items ?? []).join("\n")}
+              onChange={(e) =>
+                upd({
+                  quickPicks: {
+                    title: draft.quickPicks?.title ?? "",
+                    items: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                  },
+                })
+              }
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Pull quote</label>
+            <textarea
+              rows={2}
+              value={draft.pullQuote}
+              onChange={(e) => upd({ pullQuote: e.target.value })}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">What we'd skip</label>
+            <textarea
+              rows={2}
+              value={draft.whatWedSkip}
+              onChange={(e) => upd({ whatWedSkip: e.target.value })}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Body (paragraphs separated by blank line)</label>
+            <textarea
+              rows={14}
+              value={(draft.body ?? []).join("\n\n")}
+              onChange={(e) =>
+                upd({ body: e.target.value.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) })
+              }
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow font-mono text-sm"
+            />
+          </div>
+
+          <Field label="SEO title" value={draft.seoTitle} onChange={(v) => upd({ seoTitle: v })} />
+          <div>
+            <label className="block font-display text-sm text-ink mb-1">Meta description</label>
+            <textarea
+              rows={2}
+              value={draft.metaDescription}
+              onChange={(e) => upd({ metaDescription: e.target.value })}
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setStep(3)}
+              className="bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+            >
+              CONTINUE →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-2xl text-ink">PUBLISH</h3>
+            <button
+              onClick={() => setStep(2)}
+              className="bg-cream text-ink font-display px-4 py-1 border-2 border-ink hover:bg-acid-yellow"
+            >
+              ← BACK
+            </button>
+          </div>
+          <p className="text-ink/80 font-medium">
+            Publishing <span className="font-display">{draft.title}</span> to <code>/{draft.slug}</code>.
+          </p>
+          <button
+            onClick={publish}
+            disabled={publishing}
+            className="bg-magenta text-cream font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+          >
+            {publishing ? "PUBLISHING…" : "PUBLISH NOW"}
+          </button>
+        </div>
+      )}
+
+      <div className="bg-cream border-4 border-ink chunk-shadow p-6">
+        <h3 className="font-display text-2xl text-ink mb-1">ALL PUBLISHED POSTS</h3>
+        <p className="text-ink/60 text-sm mb-4">
+          {published.length} total. Edit reloads any post (CMS or code-based) into the wizard; publishing creates/overwrites a CMS version which takes precedence on the live site.
+        </p>
+        {published.length === 0 ? (
+          <p className="text-ink/60">No posts yet.</p>
         ) : (
-          <form onSubmit={sendMagicLink}>
-            <label className="font-display text-sm text-ink mb-1 block">EMAIL</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
-              className="w-full border-4 border-ink px-4 py-3 font-medium mb-4 focus:outline-none focus:bg-acid-yellow" />
-            <button type="submit" disabled={loading}
-              className="w-full bg-magenta text-cream font-display text-lg py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
-              {loading ? "SENDING..." : "SEND MAGIC LINK →"}
-            </button>
-            <button type="button" onClick={() => setMode("password")} className="mt-3 w-full text-center font-display text-xs text-ink/50 hover:text-magenta">
-              Use password instead
-            </button>
-          </form>
+          <ul className="divide-y-2 divide-ink/20">
+            {published.map((p) => (
+              <li key={p.slug} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-lg text-ink truncate">{p.title}</p>
+                  <p className="text-ink/60 text-sm truncate">
+                    /blog/{p.slug} · {p.category} · {p.dateISO || p.date || "—"}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <a
+                    href={`/blog/${p.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-cream text-ink font-display px-3 py-1 border-2 border-ink hover:bg-acid-yellow"
+                  >
+                    VIEW
+                  </a>
+                  <button
+                    onClick={() => editPost(p)}
+                    className="bg-acid-yellow text-ink font-display px-4 py-1 border-2 border-ink hover:bg-magenta hover:text-cream"
+                  >
+                    EDIT
+                  </button>
+                  <button
+                    onClick={() => deletePost(p.slug)}
+                    className="bg-destructive text-cream font-display px-4 py-1"
+                  >
+                    DELETE
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>
@@ -172,1234 +3691,154 @@ function AuthGate({ onAuth }: { onAuth: (user: User) => void }) {
 }
 
 
-// ── Not Authorized ────────────────────────────────────────────────────────────
-function NotAuthorized({ user }: { user: User }) {
-  return (
-    <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-      <div className="bg-acid-yellow border-4 border-ink chunk-shadow p-8 max-w-md text-center">
-        <p className="font-display text-3xl text-ink mb-3">NOT AUTHORIZED</p>
-        <p className="text-ink/70 text-sm mb-4">
-          Signed in as <strong>{user.email}</strong> but this account doesn&apos;t have admin access.
-        </p>
-        <p className="text-ink/50 text-xs mb-6">
-          Grant admin: run in Supabase SQL Editor:<br />
-          <code className="bg-ink/10 px-2 py-1 text-[10px] mt-1 inline-block">
-            UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || {`'{"role":"admin"}'`}::jsonb WHERE email = &apos;{user.email}&apos;;
-          </code>
-        </p>
-        <button onClick={() => supabase.auth.signOut()} className="bg-ink text-cream font-display text-sm px-6 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          SIGN OUT
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-// ── Add Event Form ────────────────────────────────────────────────────────────
-const EMPTY_EVENT_FORM = {
-  slug: "",
-  title: "",
-  date: "",
-  city: "Bangalore",
-  venue: "",
-  blurb: "",
-  lineup: "",
-  status: "upcoming" as "upcoming" | "past",
-  poster_url: "",
-  sort_order: 99,
-  series: "",
-  series_label: "",
-  event_type: "standard",
-  pet_friendly: false,
-  series_tagline: "",
-  is_finale: false,
+// ============= PROMOTERS DIRECTORY TAB =============
+type PromoterRow = {
+  id?: string;
+  slug: string;
+  name: string;
+  city: string | null;
+  cities: string[];
+  blurb: string | null;
+  genres: string[];
+  instagram: string | null;
+  website: string | null;
+  booking_email: string | null;
+  logo_url: string | null;
+  trusted: boolean;
+  crawl_urls: { label: string; url: string; kind?: string }[];
+  status: string;
 };
 
-function AddEventForm({ onSuccess }: { onSuccess: () => void }) {
-  const [form, setForm] = useState(EMPTY_EVENT_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+const EMPTY_PROMOTER: PromoterRow = {
+  slug: "", name: "", city: "", cities: [], blurb: "", genres: [],
+  instagram: null, website: null, booking_email: null, logo_url: null,
+  trusted: true, crawl_urls: [], status: "approved",
+};
 
-  const updateField = (field: string, value: string | number | boolean) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+function PromoterApplicationsTab() {
+  const [rows, setRows] = useState<PromoterRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [draft, setDraft] = useState<PromoterRow>(EMPTY_PROMOTER);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const projectUrl = "/api";
+  const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+  const headers = {
+    "x-admin-password": pwd,
+    "Content-Type": "application/json",
+    apikey: "",
+    Authorization: `Bearer ${""}`,
   };
 
-  // Auto-generate slug from title
-  const handleTitleChange = (title: string) => {
-    updateField("title", title);
-    if (!form.slug || form.slug === slugify(form.title)) {
-      updateField("slug", slugify(title));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    const payload = {
-      slug: form.slug.trim(),
-      title: form.title.trim(),
-      date: form.date.trim(),
-      city: form.city.trim(),
-      venue: form.venue.trim(),
-      blurb: form.blurb.trim() || "",
-      lineup: form.lineup.split(",").map((s) => s.trim()).filter(Boolean),
-      status: form.status,
-      poster_url: form.poster_url.trim() || null,
-      sort_order: form.sort_order,
-      series: form.series.trim() || null,
-      series_label: form.series_label.trim() || null,
-      event_type: form.event_type || "standard",
-      pet_friendly: form.pet_friendly,
-      series_tagline: form.series_tagline.trim() || null,
-      is_finale: form.is_finale,
-    };
-
-    const { error } = await supabase.from("events").insert(payload);
-
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`Event "${form.title}" created!`);
-      // Revalidate the new event page + listing so poster shows immediately
-      const slug = form.slug.trim();
-      await Promise.allSettled([
-        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: `/events/${slug}` }) }),
-        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: "/events" }) }),
-      ]);
-      setForm(EMPTY_EVENT_FORM);
-      setExpanded(false);
-      onSuccess();
-    }
-
-    setSubmitting(false);
-  };
-
-  if (!expanded) {
-    return (
-      <button
-        onClick={() => setExpanded(true)}
-        className="bg-acid-yellow text-ink font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-      >
-        + ADD EVENT
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-4">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-display text-xl text-ink">NEW EVENT</h3>
-        <button type="button" onClick={() => setExpanded(false)} className="font-display text-xs text-ink/50 hover:text-magenta">
-          CANCEL
-        </button>
-      </div>
-
-      {/* Row 1: Title + Slug */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">TITLE *</label>
-          <input
-            value={form.title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="CCDXSOCIAL 04"
-            required
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">SLUG *</label>
-          <input
-            value={form.slug}
-            onChange={(e) => updateField("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-            placeholder="ccdxsocial-04"
-            required
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow font-mono"
-          />
-          <p className="text-[10px] text-ink/40 mt-0.5">URL: /events/{form.slug || "..."}</p>
-        </div>
-      </div>
-
-      {/* Row 2: Date + City + Venue */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">DATE *</label>
-          <input
-            value={form.date}
-            onChange={(e) => updateField("date", e.target.value)}
-            placeholder="Sun, Jun 29, 2026"
-            required
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">CITY *</label>
-          <input
-            value={form.city}
-            onChange={(e) => updateField("city", e.target.value)}
-            placeholder="Bangalore"
-            required
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">VENUE *</label>
-          <input
-            value={form.venue}
-            onChange={(e) => updateField("venue", e.target.value)}
-            placeholder="Indiranagar Social"
-            required
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-      </div>
-
-      {/* Row 3: Status + Sort Order */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">STATUS *</label>
-          <select
-            value={form.status}
-            onChange={(e) => updateField("status", e.target.value)}
-            className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream"
-          >
-            <option value="upcoming">Upcoming</option>
-            <option value="past">Past</option>
-          </select>
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">SORT ORDER</label>
-          <input
-            type="number"
-            value={form.sort_order}
-            onChange={(e) => updateField("sort_order", parseInt(e.target.value) || 0)}
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">EVENT TYPE</label>
-          <select
-            value={form.event_type}
-            onChange={(e) => updateField("event_type", e.target.value)}
-            className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream"
-          >
-            <option value="standard">Standard</option>
-            <option value="ccdxsocial">CCD x Social</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Row 4: Blurb */}
-      <div>
-        <label className="font-display text-xs text-ink mb-1 block">BLURB</label>
-        <textarea
-          value={form.blurb}
-          onChange={(e) => updateField("blurb", e.target.value)}
-          placeholder="Short description of the event..."
-          rows={3}
-          className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow resize-y"
-        />
-      </div>
-
-      {/* Row 5: Lineup + Poster Upload */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">LINEUP (comma-separated)</label>
-          <input
-            value={form.lineup}
-            onChange={(e) => updateField("lineup", e.target.value)}
-            placeholder="Startdawg, Merman, TBA"
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">POSTER</label>
-          <PosterUpload
-            currentUrl={form.poster_url}
-            onUploaded={(url) => updateField("poster_url", url)}
-            folder={form.slug || "new"}
-          />
-        </div>
-      </div>
-
-      {/* Row 6: Series fields */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">SERIES</label>
-          <input
-            value={form.series}
-            onChange={(e) => updateField("series", e.target.value)}
-            placeholder="ccdxsocial"
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">SERIES LABEL</label>
-          <input
-            value={form.series_label}
-            onChange={(e) => updateField("series_label", e.target.value)}
-            placeholder="CCD x SOCIAL"
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">SERIES TAGLINE</label>
-          <input
-            value={form.series_tagline}
-            onChange={(e) => updateField("series_tagline", e.target.value)}
-            placeholder="BROAD - WELCOMING - FIRST IMPRESSION"
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-          />
-        </div>
-      </div>
-
-      {/* Row 7: Checkboxes */}
-      <div className="flex gap-6">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.pet_friendly}
-            onChange={(e) => updateField("pet_friendly", e.target.checked)}
-            className="w-5 h-5 border-4 border-ink accent-magenta"
-          />
-          <span className="font-display text-xs text-ink">PET FRIENDLY</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.is_finale}
-            onChange={(e) => updateField("is_finale", e.target.checked)}
-            className="w-5 h-5 border-4 border-ink accent-magenta"
-          />
-          <span className="font-display text-xs text-ink">IS FINALE</span>
-        </label>
-      </div>
-
-      {/* Submit */}
-      <div className="pt-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="bg-magenta text-cream font-display text-sm px-8 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
-        >
-          {submitting ? "CREATING..." : "CREATE EVENT →"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-// ── Delete Confirmation Dialog ────────────────────────────────────────────────
-function DeleteConfirmDialog({
-  event,
-  onConfirm,
-  onCancel,
-}: {
-  event: Event;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm">
-      <div className="bg-cream border-4 border-ink chunk-shadow p-6 max-w-sm w-full mx-4">
-        <h3 className="font-display text-xl text-ink mb-2">DELETE EVENT?</h3>
-        <p className="text-sm text-ink/70 mb-1">
-          This will permanently remove:
-        </p>
-        <p className="font-display text-sm text-magenta mb-4">
-          &quot;{event.title}&quot; — {event.date}
-        </p>
-        <p className="text-xs text-ink/50 mb-6">
-          This action cannot be undone. RSVPs for this event will be orphaned.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 bg-ink/10 text-ink font-display text-sm py-2 border-4 border-ink hover:bg-ink/20 transition-colors"
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 bg-magenta text-cream font-display text-sm py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-          >
-            DELETE
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Events Tab ────────────────────────────────────────────────────────────────
-function EventsTab() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<Event | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [editing, setEditing] = useState<Event | null>(null);
-
-  const fetchEvents = useCallback(async () => {
-    const { data } = await supabase.from("events").select("*").order("sort_order");
-    setEvents((data as Event[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
-
-  const deleteEvent = async (event: Event) => {
-    setDeleteLoading(true);
-
-    const { error } = await supabase.from("events").delete().eq("id", event.id);
-
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`"${event.title}" deleted`);
-      fetchEvents();
-    }
-
-    setDeleteLoading(false);
-    setDeleting(null);
-  };
-
-  if (loading) return <p className="p-4 text-ink/60">Loading events...</p>;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-ink">Events ({events.length})</h2>
-      </div>
-
-      {/* Add Event Form */}
-      <AddEventForm onSuccess={fetchEvents} />
-
-      {/* Events Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b-4 border-ink text-left">
-            <th className="font-display p-2">Title</th>
-            <th className="font-display p-2">Slug</th>
-            <th className="font-display p-2">Date</th>
-            <th className="font-display p-2">City</th>
-            <th className="font-display p-2">Status</th>
-            <th className="font-display p-2">Order</th>
-            <th className="font-display p-2"></th>
-          </tr></thead>
-          <tbody>
-            {events.map((ev) => (
-              <tr key={ev.id ?? ev.slug} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
-                <td className="p-2 font-medium">{ev.title}</td>
-                <td className="p-2 font-mono text-xs text-ink/60">{ev.slug}</td>
-                <td className="p-2">{ev.date}</td>
-                <td className="p-2">{ev.city}</td>
-                <td className="p-2">
-                  <span className={`px-2 py-0.5 text-xs font-bold border-2 border-ink ${ev.status === "upcoming" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>
-                    {ev.status}
-                  </span>
-                </td>
-                <td className="p-2 text-xs text-ink/60">{ev.sort_order}</td>
-                <td className="p-2 flex gap-2">
-                  <button
-                    onClick={() => setEditing(ev)}
-                    className="text-ink font-display text-xs hover:underline"
-                  >
-                    EDIT
-                  </button>
-                  <button
-                    onClick={() => setDeleting(ev)}
-                    className="text-magenta font-display text-xs hover:underline"
-                  >
-                    DELETE
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {events.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-8 text-center text-ink/40 font-display">
-                  No events yet. Create your first one above.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-      {deleting && (
-        <DeleteConfirmDialog
-          event={deleting}
-          onConfirm={() => deleteEvent(deleting)}
-          onCancel={() => setDeleting(null)}
-        />
-      )}
-
-      {/* Edit Event Dialog */}
-      {editing && (
-        <EditEventDialog
-          event={editing}
-          onSaved={fetchEvents}
-          onClose={() => setEditing(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-/** Convert a title to a URL-safe slug */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-
-// ── Poster Upload Component ───────────────────────────────────────────────────
-function PosterUpload({
-  currentUrl,
-  onUploaded,
-  folder,
-}: {
-  currentUrl: string;
-  onUploaded: (url: string) => void;
-  folder: string;
-}) {
-  const [uploading, setUploading] = useState(false);
-  const [mode, setMode] = useState<"file" | "url">(currentUrl ? "url" : "file");
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image files allowed");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Max file size: 10MB");
-      return;
-    }
-    setUploading(true);
+  const load = async () => {
+    setLoading(true);
     try {
-      const result = await uploadPoster(file, folder);
-      onUploaded(result.url);
-      toast.success("Poster uploaded!");
-    } catch (err: any) {
-      toast.error(err.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+      const res = await fetch(`${projectUrl}/admin/promoters`, { headers });
+      const data = await res.json();
+      if (res.ok) setRows((data.promoters ?? []).map((p: any) => ({
+        ...p, cities: p.cities ?? [], genres: p.genres ?? [], crawl_urls: p.crawl_urls ?? [],
+      })));
+      else toast.error(data?.error ?? "Could not load promoters");
+    } catch { toast.error("Could not load promoters"); }
+    finally { setLoading(false); }
   };
 
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setMode("file")}
-          className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${mode === "file" ? "bg-ink text-cream" : "bg-cream text-ink"}`}>
-          UPLOAD
-        </button>
-        <button type="button" onClick={() => setMode("url")}
-          className={`font-display text-[10px] px-2 py-0.5 border-2 border-ink ${mode === "url" ? "bg-ink text-cream" : "bg-cream text-ink"}`}>
-          PASTE URL
-        </button>
-      </div>
-      {mode === "file" ? (
-        <label className="block cursor-pointer">
-          <div className={`border-4 border-dashed border-ink/30 px-3 py-3 text-center hover:border-ink/60 transition-colors ${uploading ? "opacity-50" : ""}`}>
-            {uploading ? (
-              <span className="font-display text-xs text-ink/60 animate-pulse">UPLOADING...</span>
-            ) : currentUrl ? (
-              <span className="font-display text-xs text-ink/60">✓ Uploaded — click to replace</span>
-            ) : (
-              <span className="font-display text-xs text-ink/40">Click to upload poster image</span>
-            )}
-          </div>
-          <input type="file" accept="image/*" onChange={handleFile} disabled={uploading} className="hidden" />
-        </label>
-      ) : (
-        <input
-          value={currentUrl}
-          onChange={(e) => onUploaded(e.target.value)}
-          placeholder="https://..."
-          className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow"
-        />
-      )}
-      {currentUrl && (
-        <div className="flex items-center gap-2">
-          <img src={currentUrl} alt="" className="h-10 w-10 object-cover border-2 border-ink" />
-          <span className="text-[10px] text-ink/40 truncate flex-1">{currentUrl}</span>
-          <button type="button" onClick={() => onUploaded("")} className="font-display text-[10px] text-magenta hover:underline">CLEAR</button>
-        </div>
-      )}
-    </div>
-  );
-}
+  useEffect(() => { load(); }, []);
 
-
-// ── Edit Event Dialog ─────────────────────────────────────────────────────────
-function EditEventDialog({
-  event,
-  onSaved,
-  onClose,
-}: {
-  event: Event;
-  onSaved: () => void;
-  onClose: () => void;
-}) {
-  const [form, setForm] = useState({
-    title: event.title,
-    date: event.date,
-    city: event.city,
-    venue: event.venue,
-    status: event.status,
-    poster_url: event.poster_url || "",
-    sort_order: event.sort_order,
-    blurb: (event as any).blurb || "",
-    lineup: Array.isArray((event as any).lineup) ? (event as any).lineup.join(", ") : "",
-    series: (event as any).series || "",
-    series_label: (event as any).series_label || "",
-    event_type: (event as any).event_type || "standard",
-    pet_friendly: (event as any).pet_friendly || false,
-    series_tagline: (event as any).series_tagline || "",
-    is_finale: (event as any).is_finale || false,
-  });
-  const [saving, setSaving] = useState(false);
-
-  const updateField = (field: string, value: string | number | boolean) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const save = async () => {
+    if (!draft.slug || !draft.name) { toast.error("Slug and name required"); return; }
+    try {
+      const res = await fetch(`${projectUrl}/admin/promoters`, {
+        method: "POST", headers,
+        body: JSON.stringify({ action: "upsert", payload: editingId ? { ...draft, id: editingId } : draft }),
+      });
+      if (res.ok) { toast.success("Saved"); setDraft(EMPTY_PROMOTER); setEditingId(null); load(); }
+      else { const e = await res.json(); toast.error(e?.error ?? "Save failed"); }
+    } catch { toast.error("Save failed"); }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
-    const payload = {
-      title: form.title.trim(),
-      date: form.date.trim(),
-      city: form.city.trim(),
-      venue: form.venue.trim(),
-      status: form.status,
-      poster_url: form.poster_url.trim() || null,
-      sort_order: form.sort_order,
-      blurb: form.blurb.trim() || "",
-      lineup: form.lineup.split(",").map((s) => s.trim()).filter(Boolean),
-      series: form.series.trim() || null,
-      series_label: form.series_label.trim() || null,
-      event_type: form.event_type || "standard",
-      pet_friendly: form.pet_friendly,
-      series_tagline: form.series_tagline.trim() || null,
-      is_finale: form.is_finale,
-    };
-
-    const { error } = await supabase.from("events").update(payload).eq("id", event.id);
-
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`"${form.title}" updated!`);
-      // Revalidate the event page + listing so poster shows immediately
-      await Promise.allSettled([
-        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: `/events/${event.slug}` }) }),
-        fetch("/api/revalidate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: "/events" }) }),
-      ]);
-      onSaved();
-      onClose();
-    }
-    setSaving(false);
+  const toggleTrust = async (id: string, trusted: boolean) => {
+    const res = await fetch(`${projectUrl}/admin/promoters`, {
+      method: "POST", headers,
+      body: JSON.stringify({ action: "toggle_trust", payload: { id, trusted } }),
+    });
+    if (res.ok) { setRows(rows.map((r) => r.id === id ? { ...r, trusted } : r)); }
+    else toast.error("Update failed");
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/60 backdrop-blur-sm overflow-y-auto py-8">
-      <form onSubmit={handleSave} className="bg-cream border-4 border-ink chunk-shadow p-6 max-w-2xl w-full mx-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl text-ink">EDIT: {event.title}</h3>
-          <button type="button" onClick={onClose} className="font-display text-xs text-ink/50 hover:text-magenta">✕ CLOSE</button>
-        </div>
-
-        {/* Title + Status */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2">
-            <label className="font-display text-xs text-ink mb-1 block">TITLE</label>
-            <input value={form.title} onChange={(e) => updateField("title", e.target.value)} required
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">STATUS</label>
-            <select value={form.status} onChange={(e) => updateField("status", e.target.value)}
-              className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream">
-              <option value="upcoming">Upcoming</option>
-              <option value="past">Past</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Date + City + Venue */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">DATE</label>
-            <input value={form.date} onChange={(e) => updateField("date", e.target.value)} required
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">CITY</label>
-            <input value={form.city} onChange={(e) => updateField("city", e.target.value)} required
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">VENUE</label>
-            <input value={form.venue} onChange={(e) => updateField("venue", e.target.value)} required
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-        </div>
-
-        {/* Blurb */}
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">BLURB</label>
-          <textarea value={form.blurb} onChange={(e) => updateField("blurb", e.target.value)} rows={3}
-            className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow resize-y" />
-        </div>
-
-        {/* Lineup + Sort */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2">
-            <label className="font-display text-xs text-ink mb-1 block">LINEUP (comma-separated)</label>
-            <input value={form.lineup} onChange={(e) => updateField("lineup", e.target.value)}
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">SORT ORDER</label>
-            <input type="number" value={form.sort_order} onChange={(e) => updateField("sort_order", parseInt(e.target.value) || 0)}
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-        </div>
-
-        {/* Poster Upload */}
-        <div>
-          <label className="font-display text-xs text-ink mb-1 block">POSTER</label>
-          <PosterUpload
-            currentUrl={form.poster_url}
-            onUploaded={(url) => updateField("poster_url", url)}
-            folder={event.slug}
-          />
-        </div>
-
-        {/* Series fields */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">SERIES</label>
-            <input value={form.series} onChange={(e) => updateField("series", e.target.value)}
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">SERIES LABEL</label>
-            <input value={form.series_label} onChange={(e) => updateField("series_label", e.target.value)}
-              className="w-full border-4 border-ink px-3 py-2 font-medium text-sm focus:outline-none focus:bg-acid-yellow" />
-          </div>
-          <div>
-            <label className="font-display text-xs text-ink mb-1 block">EVENT TYPE</label>
-            <select value={form.event_type} onChange={(e) => updateField("event_type", e.target.value)}
-              className="w-full border-4 border-ink px-3 py-2 font-display text-sm bg-cream">
-              <option value="standard">Standard</option>
-              <option value="ccdxsocial">CCD x Social</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Checkboxes */}
-        <div className="flex gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.pet_friendly} onChange={(e) => updateField("pet_friendly", e.target.checked)}
-              className="w-5 h-5 border-4 border-ink accent-magenta" />
-            <span className="font-display text-xs text-ink">PET FRIENDLY</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_finale} onChange={(e) => updateField("is_finale", e.target.checked)}
-              className="w-5 h-5 border-4 border-ink accent-magenta" />
-            <span className="font-display text-xs text-ink">IS FINALE</span>
-          </label>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={saving}
-            className="bg-magenta text-cream font-display text-sm px-8 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60">
-            {saving ? "SAVING..." : "SAVE CHANGES →"}
-          </button>
-          <button type="button" onClick={onClose}
-            className="bg-ink/10 text-ink font-display text-sm px-6 py-3 border-4 border-ink hover:bg-ink/20 transition-colors">
-            CANCEL
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-
-// ── Playlists Tab ─────────────────────────────────────────────────────────────
-interface PlaylistRow {
-  id: string;
-  title: string;
-  platform: "spotify" | "youtube" | "soundcloud";
-  embed_id: string;
-  url: string;
-  sort_order: number;
-  featured: boolean;
-  created_at?: string;
-}
-
-const PLATFORM_COLOURS: Record<string, string> = {
-  spotify: "bg-lime text-ink",
-  youtube: "bg-magenta text-cream",
-  soundcloud: "bg-electric-blue text-cream",
-};
-
-const blankPlaylist = (): Omit<PlaylistRow, "id" | "created_at"> => ({
-  title: "", platform: "spotify", embed_id: "", url: "", sort_order: 0, featured: false,
-});
-
-function PlaylistsTab() {
-  const [items, setItems] = useState<PlaylistRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState(blankPlaylist());
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<PlaylistRow>>({});
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from("playlists").select("*").order("sort_order", { ascending: true });
-    setItems((data as PlaylistRow[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const add = async () => {
-    if (!form.title.trim() || !form.embed_id.trim()) { toast.error("Title and embed ID are required"); return; }
-    setSaving(true);
-    const { error } = await supabase.from("playlists").insert([form]);
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Playlist added");
-    setForm(blankPlaylist());
-    setAdding(false);
-    load();
+  const del = async (id: string) => {
+    if (!confirm("Delete this promoter?")) return;
+    const res = await fetch(`${projectUrl}/admin/promoters`, {
+      method: "POST", headers,
+      body: JSON.stringify({ action: "delete", payload: { id } }),
+    });
+    if (res.ok) { toast.success("Deleted"); setRows(rows.filter((r) => r.id !== id)); }
+    else toast.error("Delete failed");
   };
 
-  const save = async (id: string) => {
-    setSaving(true);
-    const { error } = await supabase.from("playlists").update(editForm).eq("id", id);
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Saved");
-    setEditId(null);
-    load();
-  };
-
-  const remove = async (id: string) => {
-    if (!confirm("Delete this playlist?")) return;
-    const { error } = await supabase.from("playlists").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Deleted");
-    load();
-  };
-
-  const toggleFeatured = async (item: PlaylistRow) => {
-    await supabase.from("playlists").update({ featured: !item.featured }).eq("id", item.id);
-    load();
-  };
-
-  const Field = ({ label, value, onChange, type = "text", placeholder = "" }: {
-    label: string; value: string | number; onChange: (v: string) => void;
-    type?: string; placeholder?: string;
-  }) => (
-    <div className="flex flex-col gap-1">
-      <label className="font-display text-[10px] uppercase tracking-widest text-ink/60">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="border-2 border-ink px-2 py-1.5 font-medium text-sm bg-cream focus:outline-none focus:border-magenta" />
-    </div>
-  );
-
-  const PlatformSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <div className="flex flex-col gap-1">
-      <label className="font-display text-[10px] uppercase tracking-widest text-ink/60">Platform</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="border-2 border-ink px-2 py-1.5 font-medium text-sm bg-cream focus:outline-none">
-        <option value="spotify">Spotify</option>
-        <option value="youtube">YouTube</option>
-        <option value="soundcloud">SoundCloud</option>
-      </select>
-    </div>
-  );
-
-  if (loading) return <p className="p-4 text-ink/60 font-display animate-pulse">Loading playlists...</p>;
+  const edit = (r: PromoterRow) => { setDraft(r); setEditingId(r.id ?? null); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-ink">Playlists ({items.length})</h2>
-        <button onClick={() => setAdding((v) => !v)}
-          className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          {adding ? "CANCEL" : "+ ADD PLAYLIST"}
-        </button>
+      <div>
+        <h3 className="font-display text-2xl text-ink">PROMOTERS DIRECTORY</h3>
+        <p className="text-ink/70 font-medium text-sm">
+          {rows.length} total · {rows.filter((r) => r.trusted).length} trusted (feed the crawler)
+        </p>
       </div>
 
-      <p className="text-ink/60 text-sm font-medium">
-        Embed ID is the playlist ID from the URL — e.g. for Spotify{" "}
-        <code className="bg-ink/10 px-1">open.spotify.com/playlist/<strong>1cEE860l...</strong></code>
-      </p>
-
-      {/* ── Add form ── */}
-      {adding && (
-        <div className="bg-cream border-4 border-ink chunk-shadow p-5 space-y-3">
-          <p className="font-display text-ink text-lg">NEW PLAYLIST</p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Title" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="Now Spinning" />
-            <PlatformSelect value={form.platform} onChange={(v) => setForm((f) => ({ ...f, platform: v as any }))} />
-            <Field label="Embed ID" value={form.embed_id} onChange={(v) => setForm((f) => ({ ...f, embed_id: v }))} placeholder="1cEE860l9GiBvIYVM2BbSS" />
-            <Field label="Full URL (optional)" value={form.url} onChange={(v) => setForm((f) => ({ ...f, url: v }))} placeholder="https://open.spotify.com/playlist/..." />
-            <Field label="Sort order" value={form.sort_order} type="number" onChange={(v) => setForm((f) => ({ ...f, sort_order: Number(v) }))} />
-            <div className="flex items-center gap-3 self-end pb-2">
-              <input type="checkbox" id="add-featured" checked={form.featured}
-                onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))} className="w-4 h-4 accent-magenta" />
-              <label htmlFor="add-featured" className="font-display text-sm text-ink">Featured (shown first on homepage)</label>
-            </div>
-          </div>
-          <button onClick={add} disabled={saving}
-            className="bg-magenta text-cream font-display text-sm px-5 py-2 border-4 border-ink chunk-shadow disabled:opacity-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-            {saving ? "SAVING..." : "ADD PLAYLIST →"}
-          </button>
+      <div className="bg-cream border-4 border-ink chunk-shadow p-5 space-y-3">
+        <p className="font-display text-lg uppercase">{editingId ? "Edit promoter" : "Add promoter"}</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} placeholder="slug (e.g. krunk)" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Name" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.city ?? ""} onChange={(e) => setDraft({ ...draft, city: e.target.value })} placeholder="Primary city" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.cities.join(", ")} onChange={(e) => setDraft({ ...draft, cities: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} placeholder="All cities (comma separated)" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.genres.join(", ")} onChange={(e) => setDraft({ ...draft, genres: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} placeholder="Genres (comma separated)" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.instagram ?? ""} onChange={(e) => setDraft({ ...draft, instagram: e.target.value || null })} placeholder="Instagram handle" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.website ?? ""} onChange={(e) => setDraft({ ...draft, website: e.target.value || null })} placeholder="Website" className="border-2 border-ink px-3 py-2" />
+          <input value={draft.booking_email ?? ""} onChange={(e) => setDraft({ ...draft, booking_email: e.target.value || null })} placeholder="Booking email" className="border-2 border-ink px-3 py-2" />
         </div>
-      )}
-
-      {/* ── Playlist list ── */}
-      {items.length === 0 ? (
-        <div className="py-12 text-center border-4 border-dashed border-ink/20">
-          <p className="font-display text-ink/40 text-xl">No playlists yet.</p>
-          <p className="text-ink/40 text-sm mt-2">Add your first playlist above.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const isEditing = editId === item.id;
-            return (
-              <div key={item.id} className="bg-cream border-4 border-ink chunk-shadow overflow-hidden">
-                {/* ── Row header ── */}
-                <div className="flex items-center gap-3 p-4">
-                  <span className={`font-display text-xs px-2 py-1 border-2 border-ink shrink-0 ${PLATFORM_COLOURS[item.platform]}`}>
-                    {item.platform.toUpperCase()}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display text-lg truncate">{item.title}</p>
-                    <p className="text-ink/50 text-xs font-mono truncate">{item.embed_id}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    <button onClick={() => toggleFeatured(item)}
-                      className={`font-display text-xs px-2 py-1 border-2 border-ink transition-colors ${item.featured ? "bg-acid-yellow text-ink" : "bg-cream text-ink/50 hover:bg-acid-yellow/50"}`}
-                      title={item.featured ? "Remove featured" : "Set as featured"}>
-                      ★ {item.featured ? "FEATURED" : "FEATURE"}
-                    </button>
-                    <button onClick={() => { setEditId(isEditing ? null : item.id); setEditForm({ ...item }); }}
-                      className="font-display text-xs px-2 py-1 border-2 border-ink hover:bg-acid-yellow transition-colors">
-                      {isEditing ? "CANCEL" : "EDIT"}
-                    </button>
-                    <button onClick={() => remove(item.id)}
-                      className="font-display text-xs px-2 py-1 border-2 border-magenta text-magenta hover:bg-magenta hover:text-cream transition-colors">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── Inline edit form ── */}
-                {isEditing && (
-                  <div className="border-t-4 border-ink p-4 bg-cream/60 space-y-3">
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <Field label="Title" value={editForm.title ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, title: v }))} />
-                      <PlatformSelect value={editForm.platform ?? "spotify"} onChange={(v) => setEditForm((f) => ({ ...f, platform: v as any }))} />
-                      <Field label="Embed ID" value={editForm.embed_id ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, embed_id: v }))} />
-                      <Field label="Full URL" value={editForm.url ?? ""} onChange={(v) => setEditForm((f) => ({ ...f, url: v }))} />
-                      <Field label="Sort order" value={editForm.sort_order ?? 0} type="number" onChange={(v) => setEditForm((f) => ({ ...f, sort_order: Number(v) }))} />
-                    </div>
-                    <button onClick={() => save(item.id)} disabled={saving}
-                      className="bg-ink text-cream font-display text-sm px-5 py-2 border-4 border-ink disabled:opacity-50 hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-                      {saving ? "SAVING..." : "SAVE CHANGES →"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-
-function ContactsTab() {
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchMessages = useCallback(async () => {
-    const { data } = await supabase.from("contact_messages").select("*").order("created_at", { ascending: false });
-    setMessages((data as ContactMessage[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchMessages(); }, [fetchMessages]);
-
-  const deleteMessage = async (id: string) => {
-    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Deleted");
-    fetchMessages();
-  };
-
-  const exportCsv = () => {
-    const rows = [
-      "Name,Email,Message,Date",
-      ...messages.map((m) =>
-        `"${m.name || ""}","${m.email || ""}","${(m.message || "").replace(/"/g, '""')}","${m.created_at}"`
-      ),
-    ].join("\n");
-    const blob = new Blob([rows], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-  };
-
-  if (loading) return <p className="p-4 text-ink/60">Loading contacts...</p>;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-ink">Contact Messages ({messages.length})</h2>
-        <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          EXPORT CSV
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-4 border-ink text-left">
-              <th className="font-display p-2">Name</th>
-              <th className="font-display p-2">Email</th>
-              <th className="font-display p-2 max-w-[300px]">Message</th>
-              <th className="font-display p-2">Date</th>
-              <th className="font-display p-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {messages.map((m) => (
-              <tr key={m.id} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
-                <td className="p-2 font-medium">{m.name || "—"}</td>
-                <td className="p-2 text-xs">{m.email || "—"}</td>
-                <td className="p-2 text-xs text-ink/60 max-w-[300px] truncate" title={m.message}>
-                  {m.message || "—"}
-                </td>
-                <td className="p-2 text-xs text-ink/50">{new Date(m.created_at).toLocaleDateString()}</td>
-                <td className="p-2">
-                  <button onClick={() => deleteMessage(m.id)} className="text-magenta font-display text-xs hover:underline">✕</button>
-                </td>
-              </tr>
-            ))}
-            {messages.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-ink/40 font-display">No contact messages yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-
-// ── Early Access Tab ───────────────────────────────────────────────────────────
-interface EarlyAccessSignup {
-  id: string;
-  email: string;
-  source?: string;
-  created_at: string;
-}
-
-function EarlyAccessTab() {
-  const [signups, setSignups] = useState<EarlyAccessSignup[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchSignups = useCallback(async () => {
-    const { data } = await supabase.from("early_access_signups").select("*").order("created_at", { ascending: false });
-    setSignups((data as EarlyAccessSignup[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchSignups(); }, [fetchSignups]);
-
-  const exportCsv = () => {
-    const rows = [
-      "Email,Source,Date",
-      ...signups.map((s) => `"${s.email}","${s.source || ""}","${s.created_at}"`),
-    ].join("\n");
-    const blob = new Blob([rows], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `early-access-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-  };
-
-  if (loading) return <p className="p-4 text-ink/60">Loading sign-ups...</p>;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-ink">Early Access Sign-ups ({signups.length})</h2>
-        <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
-          EXPORT CSV
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-4 border-ink text-left">
-              <th className="font-display p-2">Email</th>
-              <th className="font-display p-2">Source</th>
-              <th className="font-display p-2">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {signups.map((s) => (
-              <tr key={s.id} className="border-b border-ink/10 hover:bg-acid-yellow/10 transition-colors">
-                <td className="p-2 font-medium">{s.email}</td>
-                <td className="p-2 text-xs text-ink/60">{s.source || "—"}</td>
-                <td className="p-2 text-xs text-ink/50">{new Date(s.created_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-            {signups.length === 0 && (
-              <tr>
-                <td colSpan={3} className="p-8 text-center text-ink/40 font-display">No early access sign-ups yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-
-// ── RSVPs Tab ─────────────────────────────────────────────────────────────────
-function RsvpsTab() {
-  const [rsvps, setRsvps] = useState<Rsvp[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("");
-
-  const fetchRsvps = useCallback(async () => {
-    const { data } = await supabase.from("event_rsvps").select("*").order("created_at", { ascending: false });
-    setRsvps((data as Rsvp[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchRsvps(); }, [fetchRsvps]);
-
-  const filtered = filter ? rsvps.filter((r) => r.event_slug === filter) : rsvps;
-  const slugs = [...new Set(rsvps.map((r) => r.event_slug))];
-
-  const exportCsv = () => {
-    const rows = ["Name,Email,Plus Ones,Event,Date", ...filtered.map((r) => `"${r.name}","${r.email}",${r.plus_ones},"${r.event_slug}","${r.created_at}"`)].join("\n");
-    const blob = new Blob([rows], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `rsvps-${filter || "all"}.csv`; a.click();
-  };
-
-  if (loading) return <p className="p-4 text-ink/60">Loading RSVPs...</p>;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-ink">RSVPs ({filtered.length})</h2>
+        <textarea value={draft.blurb ?? ""} onChange={(e) => setDraft({ ...draft, blurb: e.target.value })} placeholder="Blurb" rows={3} className="w-full border-2 border-ink px-3 py-2" />
+        <textarea
+          value={JSON.stringify(draft.crawl_urls, null, 2)}
+          onChange={(e) => { try { setDraft({ ...draft, crawl_urls: JSON.parse(e.target.value) }); } catch {} }}
+          placeholder='Crawl URLs JSON: [{"label":"Instagram","url":"https://...","kind":"instagram"}]'
+          rows={4}
+          className="w-full border-2 border-ink px-3 py-2 font-mono text-xs"
+        />
+        <label className="inline-flex items-center gap-2 font-display text-sm">
+          <input type="checkbox" checked={draft.trusted} onChange={(e) => setDraft({ ...draft, trusted: e.target.checked })} className="w-4 h-4 accent-magenta" />
+          Trusted (feeds the crawler)
+        </label>
         <div className="flex gap-2">
-          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="border-4 border-ink px-3 py-2 font-display text-sm bg-cream">
-            <option value="">All events</option>
-            {slugs.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <button onClick={exportCsv} className="bg-ink text-cream font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">EXPORT CSV</button>
+          <button onClick={save} className="bg-ink text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow">
+            {editingId ? "UPDATE" : "ADD"}
+          </button>
+          {editingId && (
+            <button onClick={() => { setDraft(EMPTY_PROMOTER); setEditingId(null); }} className="bg-cream text-ink font-display px-5 py-2 border-4 border-ink">
+              CANCEL
+            </button>
+          )}
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b-4 border-ink text-left">
-            <th className="font-display p-2">Name</th><th className="font-display p-2">Email</th><th className="font-display p-2">+</th><th className="font-display p-2">Event</th><th className="font-display p-2">When</th>
-          </tr></thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr key={r.id} className="border-b border-ink/10">
-                <td className="p-2 font-medium">{r.name}</td><td className="p-2">{r.email}</td><td className="p-2">{r.plus_ones}</td><td className="p-2 text-xs">{r.event_slug}</td><td className="p-2 text-xs text-ink/60">{new Date(r.created_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
+      {loading && <p className="text-ink/60">Loading…</p>}
 
-// ── Videos Tab ────────────────────────────────────────────────────────────────
-function VideosTab() {
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [url, setUrl] = useState("");
-
-  const fetchVideos = useCallback(async () => {
-    const { data } = await supabase.from("site_videos").select("*").order("sort_order");
-    setVideos((data as Video[]) ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchVideos(); }, [fetchVideos]);
-
-  const addVideo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    const id = match?.[1] ?? url.trim();
-    if (!id || id.length !== 11) { toast.error("Invalid YouTube URL"); return; }
-    const thumb = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
-    const nextOrder = videos.length ? Math.max(...videos.map((v) => v.sort_order)) + 1 : 0;
-    const { error } = await supabase.from("site_videos").insert({ youtube_id: id, title: id, thumbnail_url: thumb, sort_order: nextOrder });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Video added");
-    setUrl("");
-    fetchVideos();
-  };
-
-  const deleteVideo = async (id: string) => {
-    await supabase.from("site_videos").delete().eq("id", id);
-    toast.success("Deleted");
-    fetchVideos();
-  };
-
-  if (loading) return <p className="p-4 text-ink/60">Loading videos...</p>;
-
-  return (
-    <div className="space-y-4">
-      <h2 className="font-display text-2xl text-ink">Videos ({videos.length})</h2>
-      <form onSubmit={addVideo} className="flex gap-2">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="YouTube URL or ID" className="flex-1 border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow" />
-        <button type="submit" className="bg-acid-yellow text-ink font-display text-sm px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">ADD</button>
-      </form>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {videos.map((v) => (
-          <div key={v.id ?? v.youtube_id} className="border-4 border-ink chunk-shadow bg-cream relative group">
-            <img src={v.thumbnail_url} alt={v.title} className="w-full aspect-video object-cover" />
-            <div className="p-2"><p className="font-display text-xs truncate">{v.title}</p></div>
-            <button onClick={() => deleteVideo(v.id!)} className="absolute top-1 right-1 bg-magenta text-cream font-display text-[10px] px-2 py-0.5 border-2 border-ink opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+      <div className="space-y-3">
+        {rows.map((r) => (
+          <div key={r.id} className={`bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center justify-between gap-3 ${r.trusted ? "" : "opacity-70"}`}>
+            <div className="min-w-0">
+              <p className="font-display text-lg text-ink">{r.name} <span className="text-ink/40 text-xs">/{r.slug}</span></p>
+              <p className="text-xs text-ink/60">{r.city ?? r.cities[0]} · {r.genres.slice(0,4).join(" · ")}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => r.id && toggleTrust(r.id, !r.trusted)} className={`text-xs font-display px-3 py-1.5 border-2 border-ink ${r.trusted ? "bg-magenta text-cream" : "bg-cream text-ink"}`}>
+                {r.trusted ? "TRUSTED" : "UNTRUSTED"}
+              </button>
+              <button onClick={() => edit(r)} className="text-xs font-display bg-acid-yellow text-ink px-3 py-1.5 border-2 border-ink">EDIT</button>
+              <button onClick={() => r.id && del(r.id)} className="text-xs font-display bg-destructive text-cream px-3 py-1.5 border-2 border-ink">DEL</button>
+            </div>
           </div>
         ))}
       </div>
@@ -1407,48 +3846,933 @@ function VideosTab() {
   );
 }
 
+type AdminArtistFull = {
+  id: string; slug: string; name: string; members: string | null;
+  instagram: string | null; soundcloud: string | null; spotify: string | null;
+  bandcamp: string | null; website: string | null;
+  photo_url: string | null; booking_email: string | null; manager_email: string | null;
+  bio: string | null; why: string | null; labels: string | null;
+  based_city: string | null; from_city: string | null;
+  genres: string[]; festivals: string[];
+  fee_min_inr: number | null; fee_max_inr: number | null;
+  status: string; featured: boolean;
+  enrichment_status: string; enriched_at: string | null;
+};
 
-// ── Main Admin Component ──────────────────────────────────────────────────────
-export default function Admin() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+type ArtistsTabProps = {
+  artists: Array<AdminArtistFull>;
+  reload: () => Promise<void>;
+  enrichAll: (force: boolean) => Promise<void>;
+  enrichOne: (id: string) => Promise<void>;
+  busy: boolean;
+};
 
-  const handleAuth = useCallback((authedUser: User) => {
-    setUser(authedUser);
-    const role = authedUser.app_metadata?.role;
-    setIsAdmin(role === "admin");
-  }, []);
+function ArtistEditRow({ a, onSaved, onDeleted }: { a: AdminArtistFull; onSaved: (updated: AdminArtistFull) => void; onDeleted: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...a, genres: (a.genres ?? []).join(", "), festivals: (a.festivals ?? []).join(", ") });
+  const pwd = () => sessionStorage.getItem("ccd_admin_pass") ?? "";
 
-  if (!user) return <AuthGate onAuth={handleAuth} />;
-  if (!isAdmin) return <NotAuthorized user={user} />;
+  const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        genres: String(form.genres).split(",").map((s: string) => s.trim()).filter(Boolean),
+        festivals: String(form.festivals).split(",").map((s: string) => s.trim()).filter(Boolean),
+        fee_min_inr: form.fee_min_inr ? Number(form.fee_min_inr) : null,
+        fee_max_inr: form.fee_max_inr ? Number(form.fee_max_inr) : null,
+      };
+      const res = await fetch(`/api/artists/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd() },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      toast.success("Saved");
+      onSaved({ ...payload, id: a.id, slug: a.slug, enrichment_status: a.enrichment_status, enriched_at: a.enriched_at } as AdminArtistFull);
+      setOpen(false);
+    } catch (e: any) { toast.error(e.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  const del = async () => {
+    if (!confirm(`Delete ${a.name}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/artists/${a.id}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": pwd() },
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Deleted");
+      onDeleted(a.id);
+    } catch { toast.error("Delete failed"); }
+  };
+
+  const inp = (label: string, key: string, type = "text") => (
+    <label className="block">
+      <span className="font-mono text-xs text-ink/60 block mb-0.5">{label}</span>
+      <input type={type} value={(form as any)[key] ?? ""}
+        onChange={e => set(key, e.target.value)}
+        className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+    </label>
+  );
 
   return (
-    <div className="min-h-screen bg-cream">
-      <header className="bg-ink border-b-4 border-ink px-6 py-4 flex items-center justify-between">
-        <h1 className="font-display text-2xl text-cream">CCD ADMIN</h1>
-        <div className="flex items-center gap-4">
-          <span className="font-display text-xs text-cream/60">{user.email}</span>
-          <button onClick={() => supabase.auth.signOut().then(() => { setUser(null); setIsAdmin(false); })} className="font-display text-xs text-acid-yellow hover:text-cream transition-colors">SIGN OUT</button>
-          <a href="/" className="font-display text-sm text-acid-yellow hover:text-cream transition-colors">← SITE</a>
+    <div className="bg-cream border-4 border-ink">
+      {/* Collapsed row */}
+      <div className="flex items-center gap-3 p-3">
+        {a.photo_url
+          ? <img src={a.photo_url} alt={a.name} className="w-12 h-12 object-cover border-2 border-ink shrink-0" />
+          : <div className="w-12 h-12 border-2 border-ink bg-ink/10 flex items-center justify-center font-display text-ink/40 text-lg shrink-0">{a.name[0]}</div>
+        }
+        <div className="flex-1 min-w-0">
+          <div className="font-display text-ink">{a.name}</div>
+          <div className="text-xs text-ink/50">{a.based_city || a.from_city || "—"} · {(a.genres ?? []).slice(0,2).join(", ") || "—"}</div>
         </div>
-      </header>
-      <div className="container py-8">
-        <Tabs defaultValue="events" className="w-full">
-          <TabsList className="bg-ink border-4 border-ink mb-6 p-1 flex gap-1 flex-wrap">
-            <TabsTrigger value="events"       className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Events</TabsTrigger>
-            <TabsTrigger value="rsvps"        className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">RSVPs</TabsTrigger>
-            <TabsTrigger value="early_access" className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Early Access</TabsTrigger>
-            <TabsTrigger value="playlists"    className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Playlists</TabsTrigger>
-            <TabsTrigger value="contacts"     className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Contacts</TabsTrigger>
-            <TabsTrigger value="videos"       className="font-display text-sm text-cream data-[state=active]:bg-acid-yellow data-[state=active]:text-ink px-4 py-2">Videos</TabsTrigger>
-          </TabsList>
-          <TabsContent value="events"><EventsTab /></TabsContent>
-          <TabsContent value="rsvps"><RsvpsTab /></TabsContent>
-          <TabsContent value="early_access"><EarlyAccessTab /></TabsContent>
-          <TabsContent value="playlists"><PlaylistsTab /></TabsContent>
-          <TabsContent value="contacts"><ContactsTab /></TabsContent>
-          <TabsContent value="videos"><VideosTab /></TabsContent>
-        </Tabs>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-[10px] font-display uppercase px-2 py-0.5 border border-ink ${a.status === "approved" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>
+            {a.status}
+          </span>
+          {a.featured && <span className="text-[10px] font-display uppercase px-2 py-0.5 border border-ink bg-magenta text-cream">⭐</span>}
+          <a href={`/artists/${a.slug}`} target="_blank" rel="noreferrer"
+            className="font-display text-xs px-2 py-1 border-2 border-ink bg-cream hover:bg-acid-yellow">↗</a>
+          <button onClick={() => setOpen(v => !v)}
+            className="font-display text-xs px-3 py-1 border-2 border-ink bg-cream hover:bg-acid-yellow">
+            {open ? "▲ CLOSE" : "✏ EDIT"}
+          </button>
+          <button onClick={del} className="font-display text-xs px-2 py-1 border-2 border-ink bg-red-100 hover:bg-red-300 text-ink">✕</button>
+        </div>
+      </div>
+
+      {/* Expanded edit form */}
+      {open && (
+        <div className="border-t-4 border-ink p-4 space-y-3 bg-cream/80">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {inp("Name", "name")}
+            {inp("Members / Duo", "members")}
+            {inp("Slug (URL)", "slug")}
+            {inp("Based City", "based_city")}
+            {inp("From City", "from_city")}
+            {inp("Genres (comma-sep)", "genres")}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {inp("Instagram URL", "instagram")}
+            {inp("SoundCloud URL", "soundcloud")}
+            {inp("Spotify URL", "spotify")}
+            {inp("Bandcamp URL", "bandcamp")}
+            {inp("Website", "website")}
+            {inp("Booking Email", "booking_email")}
+            {inp("Manager Email", "manager_email")}
+            {inp("Labels", "labels")}
+            {inp("Photo URL", "photo_url")}
+          </div>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Festivals (comma-sep)</span>
+            <input value={form.festivals} onChange={e => set("festivals", e.target.value)}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+          </label>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Bio</span>
+            <textarea value={form.bio ?? ""} onChange={e => set("bio", e.target.value)} rows={3}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none resize-none" />
+          </label>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Why Book Them</span>
+            <input value={form.why ?? ""} onChange={e => set("why", e.target.value)}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {inp("Fee Min (INR)", "fee_min_inr", "number")}
+            {inp("Fee Max (INR)", "fee_max_inr", "number")}
+            <label className="block">
+              <span className="font-mono text-xs text-ink/60 block mb-0.5">Status</span>
+              <select value={form.status} onChange={e => set("status", e.target.value)}
+                className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+                <option value="pending">pending</option>
+                <option value="approved">approved</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 mt-4">
+              <input type="checkbox" checked={!!form.featured} onChange={e => set("featured", e.target.checked)}
+                className="w-4 h-4 border-2 border-ink" />
+              <span className="font-mono text-sm text-ink">Featured</span>
+            </label>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={save} disabled={saving}
+              className="bg-ink text-cream font-display px-6 py-2 border-2 border-ink disabled:opacity-50">
+              {saving ? "SAVING…" : "💾 SAVE"}
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="bg-cream text-ink font-display px-4 py-2 border-2 border-ink">
+              CANCEL
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArtistsTab({ artists: initialArtists, reload, enrichAll, enrichOne, busy }: ArtistsTabProps) {
+  const [artists, setArtists] = useState(initialArtists);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [adding, setAdding] = useState(false);
+  const [newArtist, setNewArtist] = useState({ name: "", slug: "", based_city: "", genres: "", bio: "", instagram: "", soundcloud: "", booking_email: "", status: "pending" });
+  const pwd = () => sessionStorage.getItem("ccd_admin_pass") ?? "";
+
+  // Sync when parent reloads
+  useState(() => { setArtists(initialArtists); });
+
+  const addArtist = async () => {
+    if (!newArtist.name.trim()) { toast.error("Name required"); return; }
+    const slug = newArtist.slug || newArtist.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    try {
+      const res = await fetch("/api/admin/artists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd() },
+        body: JSON.stringify({
+          ...newArtist, slug,
+          genres: newArtist.genres.split(",").map(s => s.trim()).filter(Boolean),
+          festivals: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Artist added");
+      setAdding(false);
+      setNewArtist({ name: "", slug: "", based_city: "", genres: "", bio: "", instagram: "", soundcloud: "", booking_email: "", status: "pending" });
+      await reload();
+    } catch (e: any) { toast.error(e.message || "Failed"); }
+  };
+
+  const filtered = artists.filter(a => {
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    if (!search) return true;
+    return a.name.toLowerCase().includes(search.toLowerCase()) || (a.based_city ?? "").toLowerCase().includes(search.toLowerCase());
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center gap-3">
+        <div className="font-display text-xl text-ink">ARTISTS ({artists.length})</div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+          className="border-2 border-ink px-3 py-1 text-sm font-mono bg-cream w-40 focus:outline-none" />
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+          <option value="all">All statuses</option>
+          <option value="approved">Approved</option>
+          <option value="pending">Pending</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <div className="flex-1" />
+        <button onClick={reload} disabled={busy}
+          className="bg-cream text-ink font-display text-xs px-3 py-2 border-2 border-ink disabled:opacity-50">REFRESH</button>
+        <button onClick={() => setAdding(v => !v)}
+          className="bg-acid-yellow text-ink font-display text-xs px-4 py-2 border-2 border-ink">
+          {adding ? "CANCEL" : "+ ADD ARTIST"}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="bg-cream border-4 border-ink p-4 space-y-3">
+          <div className="font-display text-lg text-ink mb-2">NEW ARTIST</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[["Name *", "name"], ["Slug (auto if blank)", "slug"], ["City", "based_city"], ["Genres (comma-sep)", "genres"], ["Instagram URL", "instagram"], ["SoundCloud URL", "soundcloud"], ["Booking Email", "booking_email"]].map(([label, key]) => (
+              <label key={key} className="block">
+                <span className="font-mono text-xs text-ink/60 block mb-0.5">{label}</span>
+                <input value={(newArtist as any)[key]} onChange={e => setNewArtist(p => ({ ...p, [key]: e.target.value }))}
+                  className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+              </label>
+            ))}
+            <label className="block">
+              <span className="font-mono text-xs text-ink/60 block mb-0.5">Status</span>
+              <select value={newArtist.status} onChange={e => setNewArtist(p => ({ ...p, status: e.target.value }))}
+                className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+                <option value="pending">pending</option>
+                <option value="approved">approved</option>
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Bio</span>
+            <textarea value={newArtist.bio} onChange={e => setNewArtist(p => ({ ...p, bio: e.target.value }))} rows={2}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none resize-none" />
+          </label>
+          <button onClick={addArtist}
+            className="bg-ink text-cream font-display px-6 py-2 border-2 border-ink">
+            CREATE ARTIST
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map(a => (
+          <ArtistEditRow key={a.id} a={a}
+            onSaved={updated => setArtists(prev => prev.map(x => x.id === updated.id ? updated : x))}
+            onDeleted={id => setArtists(prev => prev.filter(x => x.id !== id))}
+          />
+        ))}
+        {filtered.length === 0 && <p className="font-mono text-ink/40 text-sm p-4">No artists match.</p>}
+      </div>
+    </div>
+  );
+}
+
+
+
+
+// ============================================================================
+// OPERATIONS TABS  (merged from AdminPanel.tsx)
+// ============================================================================
+
+/* ── Types ── */
+type Application = {
+  id: string; user_id: string; email: string; display_name: string;
+  requested_role: string; entity_slug: string | null; message: string | null;
+  links: { instagram?: string; soundcloud?: string };
+  status: string; created_at: string;
+};
+type UserRoleRow = {
+  id: string; user_id: string; email: string; display_name: string;
+  role: string; entity_slug: string | null; entity_name: string | null;
+  created_at: string;
+};
+type FanProfile = {
+  id: string; user_id: string; display_name: string; xp: number;
+  ccd_points: number; tier: string; total_interactions: number; created_at: string;
+};
+
+const ADMIN_PW_OPS_DEFAULT = "";
+const getStoredPw = () => {
+  if (typeof window === "undefined") return "";
+  return sessionStorage.getItem(PASS_KEY) ?? "";
+};
+
+// ── Applications Tab ─────────────────────────────────────────────────────────
+function ApplicationsTab({ userId, onCountChange }: { userId: string; onCountChange?: (n: number) => void }) {
+  const [apps, setApps] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"pending" | "all">("pending");
+
+  const load = () => {
+    setLoading(true);
+    const q = filter === "pending" ? "?status=eq.pending" : "";
+    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        const arr = Array.isArray(d) ? d : [];
+        setApps(arr);
+        setLoading(false);
+        if (filter === "pending" && onCountChange) onCountChange(arr.length);
+      });
+  };
+  useEffect(load, [filter]);
+
+  const review = async (id: string, status: "approved" | "rejected") => {
+    const res = await fetch(`/api/role-applications/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
+      body: JSON.stringify({ status, reviewer_id: userId }),
+    });
+    if (res.ok) { toast.success(`Application ${status}`); load(); }
+    else toast.error("Failed");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="font-display text-xl uppercase text-ink">Role Applications</h2>
+        <div className="flex border-2 border-ink">
+          {(["pending", "all"] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`font-display text-xs uppercase px-3 py-1.5 transition-colors ${filter === f ? "bg-ink text-cream" : "text-ink hover:bg-acid-yellow"}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+        <span className="font-display text-xs text-ink/40">{apps.length} total</span>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-ink/5 border-4 border-ink/10" />)}
+        </div>
+      ) : apps.length === 0 ? (
+        <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+          <p className="font-display text-2xl text-ink/30">NO {filter === "pending" ? "PENDING " : ""}APPLICATIONS</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {apps.map(app => (
+            <div key={app.id} className={`border-4 p-5 ${app.status === "pending" ? "border-acid-yellow" : app.status === "approved" ? "border-ink/20" : "border-magenta/20"}`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-display text-lg text-ink uppercase">{app.display_name}</p>
+                    <span className={`font-display text-[10px] uppercase px-2 py-0.5 border-2 ${
+                      app.requested_role === "artist" ? "bg-magenta text-cream border-magenta" :
+                      app.requested_role === "promoter" ? "bg-electric-blue text-cream border-electric-blue" :
+                      "bg-ink text-cream border-ink"}`}>
+                      → {app.requested_role}
+                    </span>
+                    <span className={`font-display text-[10px] uppercase px-2 py-0.5 ${
+                      app.status === "pending" ? "bg-acid-yellow text-ink" :
+                      app.status === "approved" ? "bg-ink/10 text-ink/50" : "bg-magenta/20 text-magenta"}`}>
+                      {app.status}
+                    </span>
+                  </div>
+                  <p className="text-sm text-ink/60">{app.email}</p>
+                  {app.entity_slug && <p className="font-display text-xs text-ink/40">Claiming: /artists/{app.entity_slug}</p>}
+                  {app.links?.instagram && <p className="text-xs text-ink/50">IG: {app.links.instagram}</p>}
+                  {app.links?.soundcloud && <p className="text-xs text-ink/50">SC: {app.links.soundcloud}</p>}
+                  {app.message && (
+                    <p className="text-sm text-ink/70 bg-ink/5 border border-ink/10 p-3 mt-2 max-w-xl">
+                      &ldquo;{app.message}&rdquo;
+                    </p>
+                  )}
+                  <p className="text-[10px] text-ink/30 mt-1">{new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                </div>
+                {app.status === "pending" && (
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => review(app.id, "approved")}
+                      className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-4 border-ink hover:bg-acid-yellow hover:text-ink transition-colors">
+                      ✓ Approve
+                    </button>
+                    <button onClick={() => review(app.id, "rejected")}
+                      className="font-display text-xs uppercase bg-cream text-ink px-4 py-2 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+                      ✗ Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Roles Tab ─────────────────────────────────────────────────────────────────
+function RolesTab({ userId }: { userId: string }) {
+  const [roles, setRoles] = useState<UserRoleRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAssign, setShowAssign] = useState(false);
+  const [form, setForm] = useState({ user_id: "", email: "", display_name: "", role: "artist", entity_slug: "" });
+
+  useEffect(() => {
+    fetch("/api/admin-roles", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setRoles(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
+  const assign = async () => {
+    if (!form.user_id || !form.email) { toast.error("user_id and email required"); return; }
+    const res = await fetch("/api/user-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
+      body: JSON.stringify({ ...form, granted_by: userId, granted_at: new Date().toISOString() }),
+    });
+    if (res.ok) {
+      toast.success(`Role '${form.role}' assigned`);
+      setShowAssign(false);
+      setRoles(prev => [...prev.filter(r => r.user_id !== form.user_id), { ...form, id: "new", entity_name: null, created_at: new Date().toISOString() } as UserRoleRow]);
+    } else toast.error("Failed");
+  };
+
+  const ROLE_COLORS: Record<string, string> = {
+    admin: "bg-magenta text-cream", artist: "bg-acid-yellow text-ink",
+    promoter: "bg-electric-blue text-cream", venue: "bg-orange-400 text-cream", user: "bg-ink/10 text-ink",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl uppercase text-ink">User Roles</h2>
+        <button onClick={() => setShowAssign(v => !v)}
+          className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-4 border-ink hover:bg-magenta transition-colors">
+          + Assign Role
+        </button>
+      </div>
+
+      {showAssign && (
+        <div className="border-4 border-acid-yellow p-5 space-y-3">
+          <p className="font-display text-sm uppercase text-ink">Assign Role Directly</p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { k: "user_id", l: "Clerk User ID", ph: "user_2abc..." },
+              { k: "email", l: "Email", ph: "artist@email.com" },
+              { k: "display_name", l: "Display Name", ph: "Kohra" },
+              { k: "entity_slug", l: "Entity Slug (if artist)", ph: "kohra" },
+            ].map(f => (
+              <label key={f.k} className="block">
+                <span className="font-display text-[10px] uppercase text-ink/40 block mb-1">{f.l}</span>
+                <input value={(form as any)[f.k]} onChange={e => setForm(p => ({ ...p, [f.k]: e.target.value }))}
+                  placeholder={f.ph} className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none" />
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {(["user", "artist", "promoter", "venue", "admin"] as const).map(r => (
+              <button key={r} onClick={() => setForm(p => ({ ...p, role: r }))}
+                className={`font-display text-xs uppercase px-3 py-1.5 border-2 border-ink transition-colors ${form.role === r ? "bg-ink text-cream" : "hover:bg-acid-yellow"}`}>
+                {r}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={assign} className="font-display text-sm uppercase bg-ink text-cream px-5 py-2.5 border-4 border-ink hover:bg-acid-yellow hover:text-ink transition-colors">
+              Assign
+            </button>
+            <button onClick={() => setShowAssign(false)} className="font-display text-sm uppercase bg-cream text-ink px-5 py-2.5 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="animate-pulse space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : (
+        <div className="border-4 border-ink overflow-hidden">
+          <div className="bg-ink text-cream grid grid-cols-4 px-5 py-2 font-display text-[10px] uppercase">
+            <span>User / Email</span><span>Role</span><span>Entity</span><span>Since</span>
+          </div>
+          {roles.map(r => (
+            <div key={r.id} className="grid grid-cols-4 items-center px-5 py-3 border-t border-ink/10 hover:bg-ink/5 transition-colors">
+              <div>
+                <p className="font-display text-xs text-ink">{r.display_name || "—"}</p>
+                <p className="text-[10px] text-ink/40 truncate">{r.email}</p>
+              </div>
+              <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit border border-ink/20 ${ROLE_COLORS[r.role] ?? "bg-cream text-ink"}`}>{r.role}</span>
+              <p className="text-xs text-ink/50 truncate">{r.entity_slug || "—"}</p>
+              <p className="text-[10px] text-ink/30">{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+            </div>
+          ))}
+          {roles.length === 0 && (
+            <div className="px-5 py-8 text-center text-ink/30 font-display text-sm">NO ROLES ASSIGNED YET</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── XP / Fans Tab ─────────────────────────────────────────────────────────────
+function XPTab() {
+  const [fans, setFans] = useState<FanProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setFans(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
+  const TIER_COLORS: Record<string, string> = {
+    lurker: "bg-ink/10 text-ink/40", regular: "bg-electric-blue/20 text-electric-blue",
+    maker: "bg-acid-yellow text-ink", legend: "bg-magenta text-cream",
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl uppercase text-ink">XP Leaderboard</h2>
+      {loading ? (
+        <div className="animate-pulse space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-12 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : fans.length === 0 ? (
+        <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+          <p className="font-display text-2xl text-ink/30">NO FANS YET</p>
+          <p className="text-ink/30 text-sm mt-2">XP data will populate as users interact with the site.</p>
+        </div>
+      ) : (
+        <div className="border-4 border-ink overflow-hidden">
+          <div className="bg-ink text-cream grid grid-cols-5 px-5 py-2 font-display text-[10px] uppercase">
+            <span>#</span><span className="col-span-2">Fan</span><span>XP / Points</span><span>Tier</span>
+          </div>
+          {fans.map((f, i) => (
+            <div key={f.id} className="grid grid-cols-5 items-center px-5 py-3 border-t border-ink/10">
+              <span className={`font-display text-sm ${i < 3 ? "text-magenta" : "text-ink/40"}`}>{i + 1}</span>
+              <div className="col-span-2">
+                <p className="font-display text-xs text-ink">{f.display_name || "Anonymous"}</p>
+                <p className="text-[10px] text-ink/30">{f.total_interactions} interactions</p>
+              </div>
+              <div>
+                <p className="font-display text-sm text-ink">{f.xp.toLocaleString()} XP</p>
+                <p className="text-[10px] text-ink/40">{f.ccd_points} pts</p>
+              </div>
+              <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit ${TIER_COLORS[f.tier] ?? "bg-ink/10 text-ink"}`}>{f.tier}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Ticketing Tab ─────────────────────────────────────────────────────────────
+function TicketingTab() {
+  const [subTab, setSubTab] = useState<"applications" | "orders" | "revenue">("applications");
+  const [applications, setApplications] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [revenue, setRevenue] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [clerkInput, setClerkInput] = useState<Record<string, string>>({});
+  const [generatedTokens, setGeneratedTokens] = useState<Record<string, string>>({});
+  const [regenId, setRegenId] = useState<string | null>(null);
+
+  const pw = getStoredPw() || ADMIN_PW_OPS_DEFAULT;
+  const tFetch = (path: string, method = "GET", body?: object) =>
+    fetch(path, {
+      method, credentials: "include",
+      headers: { "Content-Type": "application/json", "x-admin-password": pw },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }).then(r => r.json());
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      if (subTab === "applications") {
+        const d = await tFetch("/api/ticketing/admin/applications");
+        setApplications(d.applications ?? []);
+      } else if (subTab === "orders") {
+        const d = await tFetch("/api/ticketing/admin/orders");
+        setOrders(d.orders ?? []);
+      } else {
+        const d = await tFetch("/api/ticketing/admin/revenue");
+        setRevenue(d);
+      }
+    } catch { /* non-blocking */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [subTab]);
+
+  const approveApp = async (id: string) => {
+    setApprovingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/applications/${id}/approve`, "POST", {
+        clerk_user_id: clerkInput[id] || undefined,
+      });
+      if (res.ok) {
+        if (res.access_token) setGeneratedTokens(prev => ({ ...prev, [id]: res.access_token }));
+        toast.success("Application approved — share the token below with the promoter");
+        load();
+      } else toast.error(res.error ?? "Failed");
+    } finally { setApprovingId(null); }
+  };
+
+  const rejectApp = async (id: string) => {
+    const notes = prompt("Reason for rejection (optional):");
+    try {
+      await tFetch(`/api/ticketing/admin/applications/${id}/reject`, "POST", { notes: notes ?? undefined });
+      toast.success("Application rejected"); load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const refundOrder = async (id: string) => {
+    if (!confirm("Issue a full refund for this order?")) return;
+    setRefundingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/orders/${id}/refund`, "POST");
+      if (res.ok) { toast.success(`Refund issued — Razorpay ID: ${res.refund_id}`); load(); }
+      else toast.error(res.error ?? "Refund failed");
+    } finally { setRefundingId(null); }
+  };
+
+  const STATUS_CHIP: Record<string, string> = {
+    pending: "bg-acid-yellow text-ink", approved: "bg-lime-400 text-ink", rejected: "bg-magenta/20 text-ink/50",
+  };
+  const ORDER_STATUS_CHIP: Record<string, string> = {
+    paid: "bg-lime-400 text-ink", pending: "bg-acid-yellow text-ink",
+    refunded: "bg-magenta text-cream", failed: "bg-ink/20 text-ink/50", complimentary: "bg-electric-blue text-cream",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl uppercase text-ink">Ticketing</h2>
+        <div className="flex border-2 border-ink">
+          {(["applications", "orders", "revenue"] as const).map(t => (
+            <button key={t} onClick={() => setSubTab(t)}
+              className={`font-display text-xs uppercase px-3 py-1.5 transition-colors ${subTab === t ? "bg-ink text-cream" : "text-ink hover:bg-acid-yellow"}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : (
+        <>
+          {/* ── Promoter Applications ── */}
+          {subTab === "applications" && (
+            <div className="space-y-3">
+              <p className="font-display text-xs uppercase text-ink/40">{applications.length} total applications</p>
+              {applications.length === 0 && (
+                <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+                  <p className="font-display text-2xl text-ink/30">NO APPLICATIONS</p>
+                </div>
+              )}
+              {applications.map((app: any) => (
+                <div key={app.id} className={`border-4 p-5 ${app.status === "pending" ? "border-acid-yellow" : "border-ink/20"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-display text-lg text-ink uppercase">{app.name}</p>
+                        <span className={`font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${STATUS_CHIP[app.status] ?? "bg-ink/10 text-ink"}`}>{app.status}</span>
+                      </div>
+                      <p className="text-sm text-ink/60">{app.email}</p>
+                      {app.city && <p className="text-xs text-ink/40">{app.city} · {(app.genres ?? []).join(", ")}</p>}
+                      {app.instagram && <p className="text-xs text-ink/40">@{app.instagram.replace("@", "")}</p>}
+                      {app.bio && <p className="text-sm text-ink/70 bg-ink/5 p-3 mt-2 max-w-xl border border-ink/10">&ldquo;{app.bio}&rdquo;</p>}
+                      {app.sample_event && (
+                        <a href={app.sample_event} target="_blank" rel="noreferrer" className="text-xs text-magenta underline">Sample event ↗</a>
+                      )}
+                      <p className="text-[10px] text-ink/30">{new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                    {app.status === "pending" && (
+                      <div className="flex flex-col gap-2 shrink-0 min-w-[200px]">
+                        <div>
+                          <label className="block font-display text-[9px] uppercase text-ink/40 mb-1">Clerk User ID (optional)</label>
+                          <input value={clerkInput[app.id] ?? ""} onChange={e => setClerkInput(p => ({ ...p, [app.id]: e.target.value }))}
+                            placeholder="user_2abc…" className="w-full border-2 border-ink px-2 py-1 bg-cream font-mono text-xs focus:outline-none focus:bg-acid-yellow" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => approveApp(app.id)} disabled={approvingId === app.id}
+                            className="font-display text-xs uppercase bg-ink text-cream px-3 py-2 border-4 border-ink hover:bg-lime-400 hover:text-ink transition-colors disabled:opacity-50">
+                            {approvingId === app.id ? "…" : "✓ APPROVE"}
+                          </button>
+                          <button onClick={() => rejectApp(app.id)}
+                            className="font-display text-xs uppercase bg-cream text-ink px-3 py-2 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+                            ✗ REJECT
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {app.status === "approved" && app.linked_promoter_id && (
+                      <div className="min-w-[220px]">
+                        {generatedTokens[app.id] ? (
+                          <div className="bg-lime-400 border-4 border-ink p-3 mb-2">
+                            <p className="font-display text-[9px] uppercase text-ink mb-1">🔑 PROMOTER TOKEN — copy &amp; share with {app.name}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="font-mono text-[10px] text-ink bg-white px-2 py-1 border border-ink/20 flex-1 truncate">{generatedTokens[app.id]}</code>
+                              <button onClick={() => { navigator.clipboard.writeText(generatedTokens[app.id]); toast.success("Token copied!"); }}
+                                className="font-display text-[9px] uppercase bg-ink text-cream px-2 py-1 hover:bg-magenta transition-colors shrink-0">COPY</button>
+                            </div>
+                            <p className="text-[9px] text-ink/50 mt-1">Promoter pastes this at <strong>catscandance.com/promoter</strong></p>
+                          </div>
+                        ) : (
+                          <button disabled={regenId === app.id}
+                            onClick={async () => {
+                              setRegenId(app.id);
+                              try {
+                                const res = await tFetch("/api/ticketing/admin/promoter-token/regenerate", "POST", { email: app.email });
+                                if (res.ok && res.access_token) { setGeneratedTokens(p => ({ ...p, [app.id]: res.access_token })); toast.success("New token generated"); }
+                                else toast.error(res.error ?? "Failed");
+                              } finally { setRegenId(null); }
+                            }}
+                            className="font-display text-[9px] uppercase bg-cream text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors disabled:opacity-50">
+                            {regenId === app.id ? "…" : "🔑 GET LOGIN TOKEN"}
+                          </button>
+                        )}
+                        <p className="text-[9px] text-ink/30 mt-1 font-mono">{app.linked_promoter_id.slice(0, 8)}…</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── All Orders ── */}
+          {subTab === "orders" && (
+            <div className="space-y-4">
+              <p className="font-display text-xs uppercase text-ink/40">{orders.length} orders</p>
+              {orders.length === 0 && <p className="text-ink/40 text-sm">No orders yet.</p>}
+              {orders.length > 0 && (
+                <div className="border-4 border-ink overflow-hidden">
+                  <div className="bg-ink text-cream grid grid-cols-5 px-5 py-2 font-display text-[10px] uppercase">
+                    <span className="col-span-2">Buyer</span><span>Event</span><span>Amount</span><span>Status</span>
+                  </div>
+                  {orders.map((o: any) => (
+                    <div key={o.id} className="grid grid-cols-5 items-center px-5 py-3 border-t border-ink/10 hover:bg-ink/5 transition-colors">
+                      <div className="col-span-2 min-w-0">
+                        <p className="font-display text-xs text-ink truncate">{o.buyer_name}</p>
+                        <p className="text-[10px] text-ink/40 truncate">{o.buyer_email}</p>
+                        <p className="text-[9px] text-ink/20 font-mono truncate">{o.id.slice(0, 8)}…</p>
+                      </div>
+                      <p className="text-xs text-ink/60 truncate">{o.event_slug}</p>
+                      <div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                        {o.status === "paid" && o.razorpay_payment_id && (
+                          <button onClick={() => refundOrder(o.id)} disabled={refundingId === o.id}
+                            className="font-display text-[9px] uppercase text-magenta hover:underline mt-0.5 disabled:opacity-40">
+                            {refundingId === o.id ? "…" : "REFUND"}
+                          </button>
+                        )}
+                      </div>
+                      <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit border border-ink/20 ${ORDER_STATUS_CHIP[o.status] ?? "bg-ink/10 text-ink"}`}>{o.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Revenue Summary ── */}
+          {subTab === "revenue" && revenue && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink border-4 border-ink">
+                {[
+                  { label: "Total Orders", value: revenue.total_orders },
+                  { label: "Gross Revenue", value: `₹${Number(revenue.gross_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "CCD Revenue", value: `₹${Number(revenue.ccd_revenue_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "Buyer Fees", value: `₹${Number(revenue.buyer_fees_inr ?? 0).toLocaleString("en-IN")}` },
+                ].map(s => (
+                  <div key={s.label} className="bg-cream p-5">
+                    <p className="font-display text-3xl text-ink">{s.value}</p>
+                    <p className="font-display text-[10px] uppercase tracking-widest text-ink/40 mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              {revenue.by_event && Object.keys(revenue.by_event).length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ BY EVENT</p>
+                  <div className="border-4 border-ink overflow-hidden">
+                    <div className="bg-ink text-cream grid grid-cols-3 px-5 py-2 font-display text-[10px] uppercase">
+                      <span className="col-span-1">Event</span><span>Orders</span><span>CCD Revenue</span>
+                    </div>
+                    {Object.entries(revenue.by_event).sort((a: any, b: any) => b[1].ccd_paise - a[1].ccd_paise).map(([slug, data]: [string, any]) => (
+                      <div key={slug} className="grid grid-cols-3 items-center px-5 py-3 border-t border-ink/10">
+                        <p className="text-xs text-ink truncate">{slug}</p>
+                        <p className="font-display text-sm text-ink">{data.count}</p>
+                        <p className="font-display text-sm text-ink">₹{(data.ccd_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {revenue.recent_orders?.length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ RECENT PAID ORDERS</p>
+                  <div className="space-y-2">
+                    {revenue.recent_orders.slice(0, 10).map((o: any) => (
+                      <div key={o.id} className="flex items-center justify-between border-2 border-ink/10 px-4 py-2 hover:bg-ink/5">
+                        <div>
+                          <p className="font-display text-xs text-ink">{o.buyer_name}</p>
+                          <p className="text-[10px] text-ink/40">{o.event_slug} · {o.buyer_email}</p>
+                        </div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {subTab === "revenue" && !revenue && !loading && (
+            <p className="text-ink/40 text-sm">No revenue data yet.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── System Tab ────────────────────────────────────────────────────────────────
+function SystemTab() {
+  const [scraperStatus, setScraperStatus] = useState<any>(null);
+  const [running, setRunning] = useState(false);
+  const [fans, setFans] = useState<FanProfile[]>([]);
+  const [fansLoaded, setFansLoaded] = useState(false);
+
+  const triggerScraper = async () => {
+    setRunning(true);
+    const res = await fetch("/api/cron/scrape-events", {
+      method: "POST",
+      headers: { "x-admin-password": getStoredPw() },
+    });
+    const data = res.ok ? await res.json() : { error: "Failed" };
+    setScraperStatus(data);
+    setRunning(false);
+    if (data.ok) toast.success(`Scraped ${data.scraped} events, published ${data.upserted}`);
+    else toast.error("Scraper failed");
+  };
+
+  useEffect(() => {
+    if (fansLoaded) return;
+    fetch("/api/fan-profiles?order=xp.desc&limit=10", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setFans(Array.isArray(d) ? d : []); setFansLoaded(true); });
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl uppercase text-ink">System</h2>
+
+      {/* Scraper */}
+      <div className="border-4 border-ink p-5 space-y-4">
+        <p className="font-display text-sm uppercase text-ink">Event Curation Scraper</p>
+        <p className="text-sm text-ink/60">Runs nightly at 2am IST via Vercel cron. Sources: District.in, Insider.in, HighApe, Skillbox. Scored by Claude Haiku (threshold ≥6/10).</p>
+        <button onClick={triggerScraper} disabled={running}
+          className="font-display text-sm uppercase bg-ink text-cream px-5 py-3 border-4 border-ink hover:bg-magenta disabled:opacity-50 transition-colors">
+          {running ? "Running…" : "▶ Run Scraper Now"}
+        </button>
+        {scraperStatus && (
+          <div className="bg-ink/5 border-2 border-ink/10 p-4 font-mono text-xs">
+            <pre className="whitespace-pre-wrap text-ink/70">{JSON.stringify(scraperStatus, null, 2)}</pre>
+          </div>
+        )}
+      </div>
+
+      {/* Top fans quick view */}
+      <div className="border-4 border-ink p-5">
+        <p className="font-display text-sm uppercase text-ink mb-3">Top 10 Fans by XP</p>
+        {fans.length === 0 ? (
+          <p className="text-ink/40 text-sm">No fans yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {fans.map((f, i) => (
+              <div key={f.id} className="flex items-center justify-between border border-ink/10 px-3 py-2">
+                <span className={`font-display text-sm w-6 ${i < 3 ? "text-magenta" : "text-ink/40"}`}>{i + 1}</span>
+                <span className="flex-1 text-xs text-ink truncate">{f.display_name || "Anonymous"}</span>
+                <span className="font-display text-sm text-ink">{f.xp.toLocaleString()} XP</span>
+                <span className={`ml-3 font-display text-[9px] uppercase px-2 py-0.5 ${
+                  f.tier === "legend" ? "bg-magenta text-cream" :
+                  f.tier === "maker" ? "bg-acid-yellow text-ink" :
+                  f.tier === "regular" ? "bg-electric-blue/20 text-electric-blue" : "bg-ink/10 text-ink/40"
+                }`}>{f.tier}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SQL reference */}
+      <div className="border-4 border-ink p-5">
+        <p className="font-display text-sm uppercase text-ink mb-3">Quick SQL Reference</p>
+        <div className="space-y-2">
+          {[
+            "Run migration: paste 001_knowledge_graph.sql in Supabase SQL Editor",
+            "Run seed data: paste 002_seed_data.sql after migration",
+            "Check event appearances: SELECT * FROM event_appearances ORDER BY event_date DESC LIMIT 20;",
+            "Check artist connections: SELECT * FROM artist_connections ORDER BY strength DESC;",
+            "Fan leaderboard: SELECT * FROM fan_profiles ORDER BY xp DESC LIMIT 10;",
+          ].map((s, i) => (
+            <p key={i} className="text-xs text-ink/60 font-mono bg-ink/5 px-3 py-2 border border-ink/10">{s}</p>
+          ))}
+        </div>
       </div>
     </div>
   );

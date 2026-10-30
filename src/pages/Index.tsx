@@ -1,42 +1,61 @@
-/**
- * Homepage — clean, non-repetitive layout.
- *
- * Sections:
- *   Nav → Hero → Identity strip → About → Early Access →
- *   HomepageEvents (single unified section) →
- *   Videos → Playlist → Drops → Instagram → Contact → Footer
- *
- * Performance: Hero + Nav load eagerly (above-the-fold).
- * Everything below the fold is lazy-loaded to reduce initial JS bundle.
- */
-import { lazy, Suspense, useEffect } from "react";
-import dynamic from "next/dynamic";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "@/lib/compat-router";
+import { useSmoothScroll } from "@/hooks/useSmoothScroll";
 import Nav from "@/components/Nav";
 import Hero from "@/components/Hero";
-import SEO from "@/components/SEO";
-
-// Below-the-fold components — loaded after initial paint
-const MarqueeBySlot = dynamic(() => import("@/components/MarqueeBySlot"));
-const About = dynamic(() => import("@/components/About"));
-const HomepageEvents = dynamic(() => import("@/components/HomepageEvents"));
-const Contact = dynamic(() => import("@/components/Contact"));
-const Footer = dynamic(() => import("@/components/Footer"));
+import MarqueeBySlot from "@/components/MarqueeBySlot";
+import About from "@/components/About";
+import Events from "@/components/Events";
+import CcdxSocialHomeStrip from "@/components/CcdxSocialHomeStrip";
+import Contact from "@/components/Contact";
+import Footer from "@/components/Footer";
+import Catbot from "@/components/Catbot";
 import SectionReveal from "@/components/SectionReveal";
-const MoonwalkCat = dynamic(() => import("@/components/MoonwalkCat"), { ssr: false });
+import SectionDots from "@/components/SectionDots";
+import SEO from "@/components/SEO";
+import MoonwalkCat from "@/components/MoonwalkCat";
+import SceneSnapshot from "@/components/SceneSnapshot";
+import GenreWheel from "@/components/GenreWheel";
+import ArtistSpotlight from "@/components/ArtistSpotlight";
+import CityMarquee from "@/components/CityMarquee";
+import { usePlatformStats } from "@/hooks/useSocialProof";
 
 const Playlist = lazy(() => import("@/components/Playlist"));
 const Drops = lazy(() => import("@/components/Drops"));
+const Instagram = lazy(() => import("@/components/Instagram"));
 const Videos = lazy(() => import("@/components/Videos"));
 const EarlyAccess = lazy(() => import("@/components/EarlyAccess"));
-const Instagram = dynamic(() => import("@/components/Instagram"), { ssr: false });
 
 const SectionFallback = ({ bg = "bg-cream" }: { bg?: string }) => (
   <div className={`${bg} border-b-4 border-ink min-h-[220px] animate-pulse`} aria-hidden />
 );
 
 const Index = () => {
+  useSmoothScroll();
   const location = useLocation();
+  const platformStats = usePlatformStats();
+
+  // ── Section visibility (loaded from site_settings) ──
+  // Defaults are ON so content shows immediately; admin can turn sections off.
+  const [sectionVis, setSectionVis] = useState({
+    show_scene_map: true,
+    show_pick_your_sound: true,
+    show_featured_artists: true,
+  });
+
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.home_content?.section_visibility) {
+          setSectionVis((prev) => ({
+            ...prev,
+            ...data.home_content.section_visibility,
+          }));
+        }
+      })
+      .catch(() => {/* fail silently — defaults already off */});
+  }, []);
 
   useEffect(() => {
     if (location.hash === "#early-access") {
@@ -45,55 +64,138 @@ const Index = () => {
       }, 80);
     }
   }, [location.hash]);
-
   return (
     <>
       <SEO
         title="Cats Can Dance — India's Underground Electronic Music Scene"
-        description="Discover India's underground electronic music scene. Events in Bengaluru, Mumbai, Delhi & Goa. Limited apparel drops. Free RSVP events."
+        description="Discover India's underground electronic music scene. Events in Bengaluru, Mumbai, Delhi & Goa. Artist directory, genre guides, global scene origins and limited apparel drops."
         path="/"
-        keywords="india electronic music, bangalore underground, cats can dance, ccd events, underground dance music india"
+        keywords="india electronic music, bangalore underground, mumbai techno, delhi house, goa trance, electronic music india, cats can dance, jungle drum bass india"
+        jsonLd={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "Cats Can Dance",
+            url: "https://catscandance.com",
+            logo: "https://catscandance.com/og-image.png",
+            description: "Bangalore underground crew — dance music nights, limited apparel drops, CCD goods, and cool culture & streetwear.",
+            sameAs: ["https://instagram.com/catscandance"],
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com/" },
+              { "@type": "ListItem", position: 2, name: "Events", item: "https://catscandance.com/events" },
+              { "@type": "ListItem", position: 3, name: "Shop", item: "https://catscandance.com/shop" },
+            ],
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: [
+              {
+                "@type": "Question",
+                name: "What is Cats Can Dance?",
+                acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance is a Bengaluru-based underground dance music event series and streetwear collective, hosting House, Disco, Jungle, Garage, and Drum & Bass nights across Bengaluru venues, and producing limited-edition streetwear drops rooted in dance music culture." },
+              },
+              {
+                "@type": "Question",
+                name: "Where does Cats Can Dance host events in Bangalore?",
+                acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance hosts RSVP-only underground dance music episodes at venues including Bar Wild in Indiranagar, Bengaluru. All upcoming events are listed at catscandance.com/events." },
+              },
+              {
+                "@type": "Question",
+                name: "What music genres does Cats Can Dance play?",
+                acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance events feature House, Disco, Jungle, Garage, and Drum & Bass — underground dance music genres curated by resident and guest selectors in Bengaluru." },
+              },
+              {
+                "@type": "Question",
+                name: "Does Cats Can Dance sell streetwear?",
+                acceptedAnswer: { "@type": "Answer", text: "Yes. Cats Can Dance produces limited-edition streetwear drops rooted in underground dance music culture, screen-printed in Bangalore. No restocks. Available at catscandance.com/shop." },
+              },
+              {
+                "@type": "Question",
+                name: "How do I RSVP to a Cats Can Dance event?",
+                acceptedAnswer: { "@type": "Answer", text: "RSVP to upcoming Cats Can Dance events at catscandance.com/events. Capacity is limited — RSVP early. Most episodes are free entry with name on the door." },
+              },
+            ],
+          },
+        ]}
       />
       <main className="bg-background text-foreground">
         <Nav />
+        <SectionDots />
+        <Catbot />
         <MoonwalkCat />
         <Hero />
-
-        {/* ── Identity strip ── */}
+        {/* ── Identity strip — one sentence for first-time visitors ── */}
         <div className="bg-ink border-b-4 border-ink py-3 px-4">
           <p className="container font-display text-cream text-xs md:text-sm uppercase tracking-[0.18em] text-center">
             Bengaluru underground crew · Dance music episodes · Limited streetwear drops
           </p>
         </div>
-
+        {/* ── Platform social proof strip — shown when data is available ── */}
+        {platformStats && (platformStats.total_signups > 0 || platformStats.total_artists > 0) && (
+          <div className="bg-acid-yellow border-b-4 border-ink py-3 px-4">
+            <div className="container flex flex-wrap justify-center gap-x-8 gap-y-1">
+              {platformStats.total_signups > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_signups.toLocaleString("en-IN")} on the list
+                </span>
+              )}
+              {platformStats.total_artists > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_artists.toLocaleString("en-IN")} artists
+                </span>
+              )}
+              {platformStats.total_rsvps > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_rsvps.toLocaleString("en-IN")} RSVPs this season
+                </span>
+              )}
+              <span className="font-display text-ink text-xs uppercase tracking-widest">
+                ✦ {platformStats.cities} cities
+              </span>
+            </div>
+          </div>
+        )}
+        <CityMarquee />
         <MarqueeBySlot id="above-about" />
         <SectionReveal><About /></SectionReveal>
-
-        {/* ── Events — one unified section, no repetition ── */}
-        <SectionReveal><HomepageEvents /></SectionReveal>
-
+        {/* ── EarlyAccess moved up — email capture is the #1 conversion action ── */}
+        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
+          <SectionReveal><EarlyAccess /></SectionReveal>
+        </Suspense>
+        <MarqueeBySlot id="above-events" />
+        <SectionReveal><Events /></SectionReveal>
+        <SectionReveal><CcdxSocialHomeStrip /></SectionReveal>
+        {/* ── Scene Discovery Sections (toggled from Admin > Homepage) ── */}
+        {sectionVis.show_scene_map && (
+          <SectionReveal><SceneSnapshot /></SectionReveal>
+        )}
+        {sectionVis.show_pick_your_sound && (
+          <SectionReveal><GenreWheel /></SectionReveal>
+        )}
+        {sectionVis.show_featured_artists && (
+          <SectionReveal><ArtistSpotlight /></SectionReveal>
+        )}
         <MarqueeBySlot id="above-videos" />
         <Suspense fallback={<SectionFallback bg="bg-ink" />}>
           <SectionReveal><Videos /></SectionReveal>
         </Suspense>
-
         <MarqueeBySlot id="above-playlist" />
         <Suspense fallback={<SectionFallback bg="bg-magenta" />}>
           <SectionReveal><Playlist /></SectionReveal>
         </Suspense>
-
         <MarqueeBySlot id="above-drops" />
         <Suspense fallback={<SectionFallback bg="bg-cream" />}>
           <SectionReveal id="drops"><Drops /></SectionReveal>
         </Suspense>
-
-        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
-          <SectionReveal><EarlyAccess /></SectionReveal>
-        </Suspense>
-
         <MarqueeBySlot id="above-instagram" />
-        <SectionReveal><Instagram /></SectionReveal>
-
+        <Suspense fallback={<SectionFallback bg="bg-magenta" />}>
+          <SectionReveal><Instagram /></SectionReveal>
+        </Suspense>
         <Contact />
         <Footer />
       </main>

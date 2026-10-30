@@ -3,11 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    /* scroll-behavior handled by Lenis — CSS scroll-behavior conflicts with
-       programmatic scroll control and causes double-smooth-scroll glitches */
-  }
-
   :root {
     /* Cats Can Dance — Brutalist palette */
     --background: 20 6% 90%;            /* stone */
@@ -136,12 +131,6 @@
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-20px); }
   }
-
-  @keyframes progress {
-    0% { width: 0%; margin-left: 0; }
-    50% { width: 70%; margin-left: 0; }
-    100% { width: 100%; margin-left: 0; }
-  }
 }
 
 /* DISCO MODE */
@@ -172,15 +161,6 @@ body.disco .chunk-shadow,
 body.disco .chunk-shadow-lg { animation: disco-pulse 0.5s ease-in-out infinite; }
 body.disco .wiggle { animation: disco-dance 0.4s ease-in-out infinite !important; }
 body.disco .marquee-speed { animation-duration: 6s !important; }
-
-/* MoonwalkCat gentle bounce — runs via CSS compositor, not JS */
-@keyframes bounce-gentle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-.animate-bounce-gentle {
-  animation: bounce-gentle 0.6s ease-in-out infinite;
-}
 
 @media (prefers-reduced-motion: reduce) {
   body.disco,

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-shim";
 
 export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general" | "sponsors";
 
@@ -138,7 +138,7 @@ const PartnerContactDialog = ({ kind, trigger, defaultReason, defaultMessage, op
         "",
         parsed.data.message,
       ].filter(Boolean).join("\n");
-      const { error } = await supabase.from("contact_messages").insert({
+      const { data, error } = await supabase.functions.invoke("contact-submit", {
         body: {
           name: parsed.data.name,
           email: parsed.data.email,
@@ -149,7 +149,7 @@ const PartnerContactDialog = ({ kind, trigger, defaultReason, defaultMessage, op
           website,
         },
       });
-      if (error) throw new Error("send failed");
+      if (error || (data as any)?.error) throw new Error("send failed");
       toast.success("Sent! We'll be in touch soon.");
       setSent(true);
       setForm({ name: "", email: "", phone: "", reason: cfg.reasons[0], message: "" });

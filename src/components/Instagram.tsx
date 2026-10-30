@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const HANDLE = "catscandance";
+const HANDLE = "catscan.dance";
 const BEHOLD_URL = "https://feeds.behold.so/6bt7nDISwk0mUzAQMd9s";
 
 type IgPost = {
